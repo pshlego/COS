@@ -105,7 +105,7 @@ def set_up_encoder(cfg, sequence_length=None, no_index=False):
     else:
         gpu_index_flat = None
         doc_ids = None
-    
+    # gpu_index_flat이 faiss로 만든 index
     return encoder, tensorizer, gpu_index_flat, doc_ids
 
 def check_across_row(start, end, row_indices):
@@ -200,6 +200,7 @@ def contrastive_generate_grounding(
                     if any([start <= cell[1] and end >= cell[0] for cell in cells]):
                         continue
                     if batch_row_indices is not None:
+                        # 같은 row내에 있는지 확인
                         mid = check_across_row(start, end, batch_row_indices[i])
                     else:
                         mid = False
@@ -258,7 +259,7 @@ def generate_question_vectors(
             q_seg_batch = torch.zeros_like(q_ids_batch).cuda()
             q_attn_mask = tensorizer.get_attn_mask(q_ids_batch)
 
-            seq_out, out, _ = question_encoder(q_ids_batch, q_seg_batch, q_attn_mask, expert_id=expert_id)
+            seq_out, out, _ = question_encoder(input_ids=q_ids_batch, token_type_ids=q_seg_batch, attention_mask=q_attn_mask, expert_id=expert_id)
             if mean_pool:
                 out = mean_pooling(seq_out, q_attn_mask)
             query_vectors.append(out.cpu())
@@ -287,7 +288,7 @@ def rerank_hop1_results(
             q_seg_batch = torch.zeros_like(q_ids_batch).cuda()
             q_attn_mask = tensorizer.get_attn_mask(q_ids_batch)
 
-            outputs = encoder(q_ids_batch, q_seg_batch, q_attn_mask, expert_id=expert_id)
+            outputs = encoder(input_ids=q_ids_batch, token_type_ids=q_seg_batch, attention_mask=q_attn_mask, expert_id=expert_id)
             ctx_sep_rep = []
             for i in range(len(batch_sep_positions)):
                 ctx_sep_rep.append(outputs[0][i][batch_sep_positions[i]])

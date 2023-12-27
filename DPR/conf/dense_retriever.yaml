@@ -29,7 +29,7 @@ n_docs: 100
 validation_workers: 16
 
 # Batch size to generate query embeddings
-batch_size: 128
+batch_size: 512
 
 num_shards: 1
 shard_id: 0

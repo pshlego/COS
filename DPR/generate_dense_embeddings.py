@@ -15,7 +15,7 @@ import os
 import pathlib
 import pickle
 from typing import List, Tuple
-
+from tqdm import tqdm
 import hydra
 import numpy as np
 import torch
@@ -23,7 +23,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
 from dpr.data.biencoder_data import BiEncoderPassage
-from dpr.models import init_biencoder_components
+from dpr.models import init_biencoder_components, init_hf_cos_biencoder
 from dpr.options import set_cfg_params_from_state, setup_cfg_gpu, setup_logger
 
 from dpr.utils.data_utils import Tensorizer
@@ -33,7 +33,7 @@ from dpr.utils.model_utils import (
     load_states_from_checkpoint,
     move_to_device,
 )
-
+from run_chain_of_skills_hotpot import set_up_encoder
 logger = logging.getLogger()
 setup_logger(logger)
 
@@ -53,7 +53,7 @@ def gen_ctx_vectors(
     bsz = cfg.batch_size
     total = 0
     results = []
-    for j, batch_start in enumerate(range(0, n, bsz)):
+    for j, batch_start in tqdm(enumerate(range(0, n, bsz)), total=n // bsz):
         batch = ctx_rows[batch_start : batch_start + bsz]
         batch_token_tensors = [
             tensorizer.text_to_tensor(
@@ -100,7 +100,7 @@ def gen_ctx_vectors(
             results.extend(
                 [(ctx_ids[i], out[i].view(-1).numpy()) for i in range(out.size(0))]
             )
-
+        # table chunk마다 key가 있고, 해당 key에 대응하여 table chunk의 embedding vector를 저장한다. title, 과 row by row로 serialize하여 embedding vector를 생성하고, 저장한다.
         if total % 10 == 0:
             logger.info("Encoded passages %d", total)
     return results
@@ -116,7 +116,9 @@ def main(cfg: DictConfig):
 
     saved_state = load_states_from_checkpoint(cfg.model_file)
     set_cfg_params_from_state(saved_state.encoder_params, cfg)
-
+    cfg.encoder.encoder_model_type = 'hf_cos'
+    sequence_length = 512
+    cfg.encoder.sequence_length = sequence_length
     if cfg.encoder.pretrained_file is not None:
         print ('setting pretrained file to None', cfg.encoder.pretrained_file)
         cfg.encoder.pretrained_file = None

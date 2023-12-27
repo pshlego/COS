@@ -3,20 +3,24 @@ defaults:
   - ctx_sources: default_sources
 
 # A trained bi-encoder checkpoint file to initialize the model
-model_file:
+model_file: /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
 
 # Name of the all-passages resource
-ctx_src:
+ctx_src: ott_wiki_passages
+#ctx_src: ott_table
 
 # which (ctx or query) encoder to be used for embedding generation
 encoder_type: ctx
 
 # output .tsv file path to write results to
-out_file:
-
+out_file: /mnt/sdd/shpark/embeds/ott_wiki_linker
+# out_file: /mnt/sdd/shpark/embeds/ott_table_original
+# out_file: /mnt/sdd/shpark/embeds/ott_wiki_retriever
+target_expert: 1
+mean_pool: False
 # Whether to lower case the input text. Set True for uncased models, False for the cased ones.
 do_lower_case: True
-
+encoder_path:
 # Number(0-based) of data shard to process
 shard_id: 0
 
@@ -24,10 +28,10 @@ shard_id: 0
 num_shards: 1
 
 gpu_id: -1
-num_gpus: -1
+num_gpus: 3
 
 # Batch size for the passage encoder forward pass (works in DataParallel mode)
-batch_size: 32
+batch_size: 1536
 
 tables_as_passages: False
 

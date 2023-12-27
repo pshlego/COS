@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import Tensor as T
-
-from dpr.models import init_biencoder_components
+from run_chain_of_skills_hotpot import contrastive_generate_grounding
+from dpr.models import init_biencoder_components, init_hf_cos_biencoder
 from dpr.options import setup_logger, setup_cfg_gpu, set_cfg_params_from_state
 from dpr.utils.data_utils import Tensorizer
 from dpr.utils.model_utils import (
@@ -33,12 +33,15 @@ def load_ott_passage_with_id(passage_path='/home/kaixinm/kaixinm/Git_repos/OTT-Q
     all_passages = json.load(open(passage_path, 'r'))
     print ('all_passages', len(all_passages))
     new_passages = {}
-    all_passages = sorted(all_passages.items())
-    for i, (k, v) in enumerate(tqdm(all_passages)):
-        if len(v) == 0:
-           continue
-        k = k.replace('/wiki/', '').replace('_', ' ')
-        new_passages[k] = (v, i+840895)
+    # all_passages = sorted(all_passages.items())
+    # for i, (k, v) in enumerate(tqdm(all_passages)):
+    #     if len(v) == 0:
+    #        continue
+    #     k = k.replace('/wiki/', '').replace('_', ' ')
+    #     new_passages[k] = (v, i+840895)
+    # all_passages = new_passages
+    for i, passage in enumerate(all_passages):
+        new_passages[passage['title']] = (passage['text'], i+840895)
     all_passages = new_passages
     print ('all_passages', len(all_passages))
     return all_passages
@@ -167,18 +170,32 @@ def get_row_indices(question, tokenizer):
     assert tokens == original_input
     return indices
 
-def prepare_all_table_chunks(tokenizer):
-    data = json.load(open('/home/v-kaixinma/blobdata/OTT-QA/reranker_data/all_plain_tables_into_chunks.json', 'r'))
-    table_chunks = []
-    table_chunk_ids = []
-    row_start = []
-    row_indices = []
-    for chunk in tqdm(data):
-        table_chunks.append(chunk['title'] + ' [SEP] ' + chunk['text'])
-        table_chunk_ids.append(chunk['chunk_id'])
-        table_row_indices = get_row_indices(chunk['title'] + ' [SEP] ' + chunk['text'], tokenizer)
-        row_start.append(table_row_indices[0])
-        row_indices.append(table_row_indices[1:])
+def prepare_all_table_chunks(filename, tokenizer):
+    # data = json.load(open(filename, 'r'))
+    # chunk_dict = {}
+    # table_chunks = []
+    # table_chunk_ids = []
+    # row_start = []
+    # row_indices = []
+    # for chunk in tqdm(data):
+    #     table_chunks.append(chunk['title'] + ' [SEP] ' + chunk['text'])
+    #     table_chunk_ids.append(chunk['chunk_id'])
+    #     table_row_indices = get_row_indices(chunk['title'] + ' [SEP] ' + chunk['text'], tokenizer)
+    #     row_start.append(table_row_indices[0])
+    #     row_indices.append(table_row_indices[1:])
+    # chunk_dict['data'] = data
+    # chunk_dict['table_chunks'] = table_chunks
+    # chunk_dict['table_chunk_ids'] = table_chunk_ids
+    # chunk_dict['row_start'] = row_start
+    # chunk_dict['row_indices'] = row_indices
+    # json.dump(chunk_dict, open('/mnt/sdd/shpark/knowledge/ott_table_chunks_original_with_row_indices.json', 'w'), indent=4)
+    with open('/mnt/sdd/shpark/knowledge/ott_table_chunks_original_with_row_indices.json', 'r') as file:
+        chunk_dict = json.load(file)
+    data = chunk_dict['data']
+    table_chunks = chunk_dict['table_chunks']
+    table_chunk_ids = chunk_dict['table_chunk_ids']
+    row_start = chunk_dict['row_start']
+    row_indices = chunk_dict['row_indices']
     return data, table_chunks, table_chunk_ids, row_start, row_indices
 
 def prepare_all_table_chunks_step2(filename, num_shards, shard_id):
@@ -283,6 +300,7 @@ def main_realistic_all_table_chunks(cfg: DictConfig):
         for i in tqdm(range(0, len(questions_tensor), b_size)):
             D, I = gpu_index_flat.search(questions_tensor[i:i+b_size].numpy(), k)  # actual search
             for j, ind in enumerate(I):
+                # document단위로 검색하기에 document index를 저장한다.
                 retrieved_titles = [doc_ids[idx].replace('ott-wiki:_', '').split('_')[0].strip() for idx in ind]
                 retrieved_scores = D[j].tolist()
                 all_retrieved.append((retrieved_titles, retrieved_scores))
@@ -310,7 +328,9 @@ def span_proposal(cfg: DictConfig):
 
     saved_state = load_states_from_checkpoint(cfg.model_file)
     set_cfg_params_from_state(saved_state.encoder_params, cfg)
-
+    cfg.encoder.encoder_model_type = 'hf_cos'
+    sequence_length = 512
+    cfg.encoder.sequence_length = sequence_length
     cfg.encoder.pretrained_file=None
     cfg.encoder.pretrained_model_cfg = 'bert-base-uncased'
 
@@ -321,15 +341,19 @@ def span_proposal(cfg: DictConfig):
         encoder, None, cfg.device, cfg.n_gpu, cfg.local_rank, cfg.fp16
     )
     encoder.eval()
-
+    
     # load weights from the model file
     model_to_load = get_model_obj(encoder)
     logger.info("Loading saved model state ...")
+    if 'question_model.encoder.embeddings.position_ids' not in saved_state.model_dict:
+        if 'question_model.encoder.embeddings.position_ids' in model_to_load.state_dict():
+            saved_state.model_dict['question_model.encoder.embeddings.position_ids'] = model_to_load.state_dict()['question_model.encoder.embeddings.position_ids']
+            saved_state.model_dict['ctx_model.encoder.embeddings.position_ids'] = model_to_load.state_dict()['ctx_model.encoder.embeddings.position_ids']
     model_to_load.load_state_dict(saved_state.model_dict, strict=True)
-
-    data, table_chunks, table_chunk_ids, row_start, row_indices = prepare_all_table_chunks(tensorizer.tokenizer)
-    found_cells = contrastive_generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size)
-
+    expert_id = 5
+    data, table_chunks, table_chunk_ids, row_start, row_indices = prepare_all_table_chunks(cfg.qa_dataset, tensorizer.tokenizer)
+    found_cells = contrastive_generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size, expert_id=expert_id)
+    #full_word_start, full_word_end, span, row_id (몇번째 row인지)
     for i in tqdm(range(len(found_cells))):
         data[i]['grounding'] = found_cells[i]
     output_name = '/'.join(cfg.model_file.split('/')[:-1]) + '/all_table_chunks_span_prediction.json'
@@ -377,7 +401,7 @@ def process_ott_beams_new(beams, original_sample, all_table_chunks, all_passages
     return all_included
 
 def chain_of_skills(cfg: DictConfig):
-    encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg)     
+    encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg, sequence_length=512)
     if 'train' in cfg.qa_dataset:
         split = 'train'
     elif 'dev' in cfg.qa_dataset:
@@ -388,6 +412,7 @@ def chain_of_skills(cfg: DictConfig):
         print ('split not found')
         exit(0)
     all_links = load_links(cfg.ctx_datatsets[2])
+    #100개의 table chunk 검색
     data = q_to_tables(cfg, encoder, tensorizer, gpu_index_flat, doc_ids)
     shard_size = int(len(data)/int(cfg.num_shards))
     print ('shard size', shard_size)
@@ -412,7 +437,7 @@ def chain_of_skills(cfg: DictConfig):
     tokenizer = SimpleTokenizer()
     cfg.encoded_ctx_files[0] = cfg.encoded_ctx_files[0].replace('ott_table_original', 'ott_wiki_linker')
     # reload the index
-    encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg)     
+    encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg, sequence_length=512)  
     logger.info(f"Setting expert_id={cfg.hop2_expert}")
     expert_id = cfg.hop2_expert
     for si, sample in enumerate(tqdm(data)):
@@ -426,6 +451,7 @@ def chain_of_skills(cfg: DictConfig):
         link_d = defaultdict(list)
         for ci, ctx in enumerate(step1_results):
             table_chunk = all_table_chunks[ctx['title']]
+            #row 단위로 decompose한다.
             table_rows = table_chunk['text'].split('\n')
             if 'gold' in ctx:
                 table_rows_docs = [{'q':question + ' [SEP] ' + table_chunk['title'] + ' ' + table_rows[0]+'\n'+row, 'chunk_id': ctx['title'], 'row_idx': ri, 'hop1 score': ctx['score'], 'chunk_is_gold': ctx['gold'], 'row_is_gold': ctx['gold'] and ri in pos_d[ctx['title']]} for ri, row in enumerate(table_rows[1:]) if row.strip()]
@@ -439,15 +465,16 @@ def chain_of_skills(cfg: DictConfig):
             if len(linked_passages) > 0:
                 for _, link in enumerate(linked_passages):
                     link_d[(ctx['title'], link[1][4])].append({'pasg_title': link[0], 'grounding': link[1][2], 'link score': link[1][0]})
-
+        # row 단위로 reranking한다.
         scores = rerank_hop1_results(encoder, tensorizer, [[b['q'] for b in row_beams[_:_+cfg.batch_size]] for _ in range(0, len(row_beams), cfg.batch_size)], 1, expert_id=4, silence=True)
         scores = [x for sub in scores for x in sub]
         for i in range(len(row_beams)):
             row_beams[i]['row_rank_score'] = scores[i]
         row_beams = sorted(row_beams, key=lambda x: x['row_rank_score']*2+x['hop1 score'], reverse=True)
         row_beams = row_beams[:cfg.hop1_keep]
-
+        # vector를 확장한다. (row 단위로)
         q_vecs = generate_question_vectors(encoder, tensorizer, [b['q'] for b in row_beams], cfg.batch_size, expert_id=expert_id, silence=True)
+        # 확장된 vector로 10개의 관련 passage를 검색한다.
         D, I = gpu_index_flat.search(q_vecs.numpy(), 10)  # actual search
         
         final_beams = []
@@ -461,6 +488,7 @@ def chain_of_skills(cfg: DictConfig):
                 for linked_p in link_d[(row['chunk_id'], row['row_idx'])]:
                     if linked_p['pasg_title'] in retrieved_titles:
                         idx = retrieved_titles.index(linked_p['pasg_title'])
+                        # 검색된 page와 동일한 page가 linking되었을 때, score를 조정한다.
                         retrieved_scores[idx] = max(retrieved_scores[idx], linked_p['link score']*max_r2_score/max_link_score)*1.1
                     else:
                         new_row = {k:v for k,v in row.items()}
@@ -498,7 +526,7 @@ def main(cfg: DictConfig):
     if cfg.do_link:
         main_realistic_all_table_chunks(cfg)
     elif cfg.do_span:
-        contrastive_grounding_cells(cfg)
+        span_proposal(cfg)
     elif cfg.do_cos:
         chain_of_skills(cfg)
     else:
