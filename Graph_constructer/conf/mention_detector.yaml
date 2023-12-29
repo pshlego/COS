@@ -23,6 +23,7 @@ do_span: True
 
 # Whether to lower case the input text. Set True for uncased models, False for the cased ones.
 do_lower_case: True
+special_tokens:
 
 # local_rank for distributed training on gpus
 local_rank: -1
