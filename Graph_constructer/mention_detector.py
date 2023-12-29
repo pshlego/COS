@@ -5,7 +5,6 @@ import json
 import os
 import numpy as np
 from typing import List
-from omegaconf import DictConfig
 from dpr.options import setup_logger, setup_cfg_gpu, set_cfg_params_from_state
 from dpr.utils.model_utils import (
     setup_for_distributed_mode,
@@ -15,15 +14,15 @@ from dpr.utils.model_utils import (
 from dpr.utils.data_utils import Tensorizer
 from dpr.models import init_biencoder_components
 from tqdm import tqdm
-from utils import check_across_row, locate_row, get_row_indices
+from utils.utils import check_across_row, locate_row, get_row_indices
 logger = logging.getLogger()
 setup_logger(logger)
 
 class MentionDetector:
-    def __init__(self, cfg, all_tables_path, all_passages_path):
+    def __init__(self, cfg, all_tables, all_passages):
         self.cfg = cfg
-        self.all_tables_path = all_tables_path
-        self.all_passages_path = all_passages_path
+        self.all_tables = all_tables
+        self.all_passages = all_passages
         
     def span_proposal(self, data_type: str):
         cfg = setup_cfg_gpu(self.cfg)
@@ -49,10 +48,10 @@ class MentionDetector:
                 saved_state.model_dict['question_model.encoder.embeddings.position_ids'] = model_to_load.state_dict()['question_model.encoder.embeddings.position_ids']
                 saved_state.model_dict['ctx_model.encoder.embeddings.position_ids'] = model_to_load.state_dict()['ctx_model.encoder.embeddings.position_ids']
         model_to_load.load_state_dict(saved_state.model_dict, strict=True)
-        expert_id = 5
+        expert_id = self.cfg.expert_id
         
         if data_type == 'table':
-            data = json.load(open(self.all_tables_path, 'r'))
+            data = self.all_tables
             if os.path.exists(cfg.table_chunk):
                 with open(cfg.table_chunk, 'r') as file:
                     chunk_dict = json.load(file)
@@ -68,10 +67,10 @@ class MentionDetector:
                 chunk_dict['row_start'] = row_start
                 chunk_dict['row_indices'] = row_indices
                 json.dump(chunk_dict, open(cfg.table_chunk, 'w'), indent=4)
-            found_cells, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_seq_length)
-            output_name = '/'.join(cfg.model_file.split('/')[:-1]) + '/all_table_chunks_span_prediction.json'
+            _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_mention_context_length)
+            output_name = self.cfg.table_mention_path
         else:
-            data = json.load(open(self.all_passages_path, 'r'))
+            data = self.all_passages
             if os.path.exists(cfg.passage_chunk):
                 with open(cfg.passage_chunk, 'r') as file:
                     chunk_dict = json.load(file)
@@ -83,8 +82,8 @@ class MentionDetector:
                 chunk_dict['passage_chunks'] = passage_chunks
                 chunk_dict['passage_chunk_ids'] = passage_chunk_ids
                 json.dump(chunk_dict, open(cfg.passage_chunk, 'w'), indent=4)
-            found_cells, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, passage_chunks, None, None, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_seq_length)
-            output_name = '/'.join(cfg.model_file.split('/')[:-1]) + '/all_passage_chunks_span_prediction.json'
+            _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, passage_chunks, None, None, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_mention_context_length)
+            output_name = self.cfg.passage_mention_path
 
         for i in tqdm(range(len(found_mentions))):
             data[i]['grounding'] = found_mentions[i]

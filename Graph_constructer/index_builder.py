@@ -1,16 +1,17 @@
 import torch
-from utils import EntityDataset
-from torch.utils.data import Sampler, DataLoader
-from torch.utils.data.distributed import DistributedSampler
+from utils.utils import EntityDataset
+from torch.utils.data import DataLoader
+from transformers import BertModel
 from tqdm import tqdm
 import os
 import gc
 import pickle
 import faiss
 import numpy as np
+from utils.model import RetrievalModel,TeacherModel,MVD
 
 class IndexBuilder:
-    def __init__(self, cfg, table_views, passage_views, embedder):
+    def __init__(self, cfg, table_views, passage_views, device, n_gpu):
         self.cfg = cfg
         self.table_views = table_views
         self.passage_views = passage_views
@@ -24,9 +25,15 @@ class IndexBuilder:
         for view in self.table_views['doc_list']:
             self.local_views['table'].append(view['local_ids'])
             self.global_views['table'].append(view['global_ids'])
+
         for view in self.passage_views['doc_list']:
             self.local_views['passage'].append(view['local_ids'])
             self.global_views['passage'].append(view['global_ids'])
+
+        embedder, _ = self.load_embedder(cfg)
+        embedder.to(device)
+        if n_gpu > 1:
+            embedder = torch.nn.DataParallel(embedder)
         self.embedder = embedder
 
     def build(self,):
@@ -50,10 +57,10 @@ class IndexBuilder:
         return indicies
     
     def get_entity_embedding(self,):
-        output_dir = self.cfg.output_dir
-        os.makedirs(output_dir, exist_ok=True)
-        entity_embedding_path = os.path.join(output_dir,"entity_embedding_data_obj.pb")
-        entity_embedding_idx_path = os.path.join(output_dir,"entity_embedding_idx_data_obj.pb")
+        entity_embedding_path = self.cfg.entity_embedding_path
+        os.makedirs(os.path.dirname(entity_embedding_path), exist_ok=True)
+        entity_embedding_idx_path = self.cfg.entity_embedding_idx_path
+        os.makedirs(os.path.dirname(entity_embedding_idx_path), exist_ok=True)
         
         if not (os.path.exists(entity_embedding_path) and os.path.exists(entity_embedding_idx_path)):
             entity_idxs,entity_embeds,data_type_idx,view2entity = self.embed_entities()
@@ -100,14 +107,20 @@ class IndexBuilder:
         entity_idxs = list()
         entity_embeds = list()
         datasets = list()
+        
         with torch.no_grad():
-            if len(local_view_embeds) > 0:
-                datasets.append(EntityDataset(local_view_embeds,view_type="local"))
+            dataloader_list = list()
             if len(global_view_embeds) > 0:
-                datasets.append(EntityDataset(global_view_embeds,view_type="global"))
-                
-            for dataset in datasets:
-                infer_dataloader = DataLoader(dataset, batch_size=self.cfg.batch_size)
+                global_view_dataset = EntityDataset(global_view_embeds,view_type="global")
+                global_view_dataloader = DataLoader(global_view_dataset, batch_size=self.cfg.global_batch_size)
+                dataloader_list.append(global_view_dataloader)
+            
+            if len(local_view_embeds) > 0:
+                local_view_dataset = EntityDataset(local_view_embeds,view_type="local")
+                local_view_dataloader = DataLoader(local_view_dataset, batch_size=self.cfg.local_batch_size)
+                dataloader_list.append(local_view_dataloader)
+            
+            for infer_dataloader in dataloader_list:
                 for batch in tqdm(infer_dataloader):
                     entity_ids,entity_idx = batch
                     entity_ids = entity_ids.cuda()
@@ -121,3 +134,24 @@ class IndexBuilder:
         entity_idxs = torch.cat(entity_idxs, dim=0).numpy()
         
         return entity_idxs, entity_embeds, data_type_idx, view2entity
+    
+    def load_embedder(self, cfg):
+        men_bert = BertModel.from_pretrained(cfg.bert_model)
+        ent_bert = BertModel.from_pretrained(cfg.bert_model)
+        tech_bert = BertModel.from_pretrained(cfg.bert_model)
+        retriever = RetrievalModel(men_bert,ent_bert)
+        teacher = TeacherModel(tech_bert)
+        if cfg.pretrain_retriever:
+            retriever.load_state_dict(torch.load(cfg.pretrain_retriever,map_location='cpu'),strict=False)
+        if cfg.pretrain_teacher:
+            teacher.load_state_dict(torch.load(cfg.pretrain_teacher,map_location='cpu'),strict=False)
+        if cfg.task_name == 'mvd':
+            model = MVD(retriever=retriever,teacher=teacher)
+            config = retriever.mention_encoder.config
+        if cfg.task_name == 'retriever':
+            model = retriever
+            config = retriever.mention_encoder.config
+        elif cfg.task_name == 'teacher':
+            model = teacher
+            config = teacher.rank_encoder.config
+        return model,config

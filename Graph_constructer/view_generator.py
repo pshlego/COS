@@ -2,13 +2,13 @@ from transformers import BertTokenizer
 import json
 from tqdm import tqdm
 import nltk
-from utils import get_row_indices
+from utils.utils import get_row_indices
 
 class ViewGenerator:
-    def __init__(self, cfg, all_tables_path, all_passages_path):
+    def __init__(self, cfg, all_tables, all_passages):
         self.cfg = cfg
-        self.all_tables_path = all_tables_path
-        self.all_passages_path = all_passages_path
+        self.all_tables = all_tables
+        self.all_passages = all_passages
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         
     def generate(self, data_type):
@@ -17,7 +17,7 @@ class ViewGenerator:
         doc_list = []
         if data_type == 'table':
             output_name = self.cfg.table_view_path
-            data = json.load(open(self.all_tables_path, 'r'))
+            data = self.all_tables
             for chunk in tqdm(data):
                 field = {}
                 window = self.get_entity_windows(chunk, 'table')
@@ -32,7 +32,7 @@ class ViewGenerator:
             json.dump(view, open(output_name, 'w'), indent=4)
         else:
             output_name = self.cfg.passage_view_path
-            data = json.load(open(self.all_passages_path, 'r'))
+            data = self.all_passages
             for chunk in tqdm(data):
                 field = {}
                 window = self.get_entity_windows(chunk, 'passage')
@@ -63,7 +63,6 @@ class ViewGenerator:
             row_start = table_row_indices[0]
             row_indicies = table_row_indices[1:]
             title_column_name_tokens = self.tokenizer.tokenize(title + ' [SEP] ' + text)[:row_start-1]
-            #locate_row(self.cfg.max_global_view_len-2, self.cfg.max_global_view_len-2, row_indicies)
             
             if len(title_column_name_tokens + [ENT] + self.tokenizer.tokenize(title + ' [SEP] ' + text)[row_start-1:])> self.cfg.max_global_view_len-2:
                 window = (title_column_name_tokens + [ENT] + self.tokenizer.tokenize(title + ' [SEP] ' + text)[row_start-1:])[:self.cfg.max_global_view_len-2]

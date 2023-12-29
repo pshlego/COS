@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import Dict,Optional
+from typing import Optional
 
 class RetrievalModel(nn.Module):
 
