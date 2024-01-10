@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+    mongodb:
+        image: mongo
+        restart: always
+        container_name: mongodb
+        shm_size: '150gb'
+        ports:
+            - "27017:27017"
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: root
+            MONGO_INITDB_ROOT_PASSWORD: 1234
+        volumes:
+            - /mnt/sdd/shpark/mongodb:/data/db

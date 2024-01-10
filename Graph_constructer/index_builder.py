@@ -47,7 +47,7 @@ class IndexBuilder:
         gc.collect()
         entity_embedding = new_entity_embedding
         dim = entity_embedding.shape[1]
-        
+        gpu_resource = faiss.StandardGpuResources()
         # Build ANN Index
         indicies={}
         for data_type in ['table', 'passage', 'whole']:
@@ -55,7 +55,12 @@ class IndexBuilder:
                 new_embedding = entity_embedding
             else:
                 new_embedding = entity_embedding[data_type_idx[data_type][0]:data_type_idx[data_type][1]]
-            indicies[data_type] = faiss.IndexFlatIP(dim)
+            cpu_index = faiss.IndexFlatIP(dim)
+            if self.cfg.is_gpu:
+                index = faiss.index_cpu_to_gpu(gpu_resource, 0, cpu_index)
+            else:
+                index = cpu_index
+            indicies[data_type] = index
             indicies[data_type].add(new_embedding.astype(np.float32))
         return indicies, view2entity
     

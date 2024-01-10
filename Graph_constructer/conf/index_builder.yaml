@@ -17,3 +17,4 @@ task_name: retriever
 # Index Configuration
 local_batch_size: 4096
 global_batch_size: 1024
+is_gpu: True
