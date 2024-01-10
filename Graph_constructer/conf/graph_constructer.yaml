@@ -6,6 +6,13 @@ defaults:
 ctx_src_table: ott_table
 ctx_src_passage: ott_wiki_passages
 
+# Output path
+table_mention_queries_path: /mnt/sdd/shpark/graph/table_mention_queries.pkl
+passage_mention_queries_path: /mnt/sdd/shpark/graph/passage_mention_queries.pkl
+table_graph_path: /mnt/sdd/shpark/graph/table_graph.json
+passage_graph_path: /mnt/sdd/shpark/graph/passage_graph.json
+
+
 # Graph construction steps
 do_mention_detection: False
 do_view_generation: False
@@ -13,3 +20,9 @@ do_index_building: True
 
 # Run on gpus
 no_cuda: False
+
+batch_size: 512
+
+top_k: 1
+threshold: 0.95
+max_seq_length: 128

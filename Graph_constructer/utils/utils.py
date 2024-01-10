@@ -1,5 +1,24 @@
 from torch.utils.data import Dataset
 import torch
+from typing import List,Optional, Union, Optional
+
+class MentionInfo(object):
+    """Constructs train/dev InputFeatures."""
+    def __init__(
+            self,
+            mention_ids:Optional[List[int]]=None,
+            datum_mention:dict=None,
+            mention_tokens:List[str]=None,
+            data_type:str='all',
+            node_id:Optional[int]=None,
+            row_id:Optional[int]=None
+            ):
+        self.datum_mention = datum_mention
+        self.node_id = node_id
+        self.row_id = row_id
+        self.mention_ids = mention_ids
+        self.mention_tokens = mention_tokens
+        self.data_type = data_type
 
 class EntityDataset(Dataset):
     
@@ -49,3 +68,34 @@ def get_row_indices(question, tokenizer):
         indices.append(len(tokens)+1)
     assert tokens == original_input
     return indices
+
+def process_mention(tokenizer, mention_dict, max_seq_length):
+    # process mention format: [CLS] context_left [STR] mention [END] context_right [SEP]
+    mention = mention_dict['mention']
+    mention_left = mention_dict['context_left']
+    mention_right = mention_dict['context_right']
+    mention_tokens = ['[unused0]'] + tokenizer.tokenize(mention) + ['[unused1]']
+    context_left = tokenizer.tokenize(mention_left)
+    context_right = tokenizer.tokenize(mention_right)
+
+    left_quota = (max_seq_length - len(mention_tokens)) // 2 - 1
+    right_quota = max_seq_length - len(mention_tokens) - left_quota - 2
+    left_add = len(context_left)
+    right_add = len(context_right)
+    if left_add <= left_quota:
+        if right_add > right_quota:
+            right_quota += left_quota - left_add
+    else:
+        if right_add <= right_quota:
+            left_quota += right_quota - right_add
+
+    mention_tokens = (
+        context_left[-left_quota:] + mention_tokens + context_right[:right_quota]
+    )
+    if len(mention_tokens) > max_seq_length - 2:
+        mention_tokens = mention_tokens[:(max_seq_length - 2)]
+    mention_tokens = ['[CLS]'] + mention_tokens + ['[SEP]']
+    mention_ids = tokenizer.convert_tokens_to_ids(mention_tokens)
+    mention_padding = [0] * (max_seq_length - len(mention_ids))
+    mention_ids += mention_padding
+    return mention_ids,mention_tokens

@@ -5,6 +5,8 @@ passage_view_path: /mnt/sdd/shpark/cos/knowledge/ott_passage_view.json
 # Output path
 entity_embedding_path: /mnt/sdd/shpark/graph/embeds/entity_embedding_data_obj.pb
 entity_embedding_idx_path: /mnt/sdd/shpark/graph/embeds/entity_embedding_idx_data_obj.pb
+data_type_idx_path: /mnt/sdd/shpark/graph/index/data_type_idx.json
+view2entity_path: /mnt/sdd/shpark/graph/index/view2entity.json
 
 # Model path
 bert_model: bert-base-uncased
