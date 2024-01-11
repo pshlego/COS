@@ -64,6 +64,17 @@
             "args":["model_file=/mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt", "encoder.use_moe=True", "encoder.moe_type=mod2:attn", "encoder.num_expert=6", "encoder.encoder_model_type=hf_cos", "encoded_ctx_files=[/mnt/sdd/shpark/embeds/ott_table_original*]", "qa_dataset=/mnt/sdd/shpark/retriever/OTT-QA/ott_dev_q_to_tables_with_bm25neg.json", "do_cos=True", "ctx_datatsets=[/mnt/sdd/shpark/knowledge/ott_table_chunks_original.json,/mnt/sdd/shpark/knowledge/ott_wiki_passages.json,[/mnt/sdd/shpark/cos/models/table_chunks_to_passages*]]", "hop1_limit=100", "hop1_keep=200"],
             "env": {"name":"CUDA_VISIBLE_DEVICES", "value":"1"},
             "justMyCode": true,
+        },
+        {
+            "name": "Graph Concstruction",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/COS/Graph_constructer/graph_constructer.py",
+            "console": "integratedTerminal",
+            "python":"/home/shpark/anaconda3/envs/hf4/bin/python",
+            "args":[],
+            "env": {"CUDA_VISIBLE_DEVICES": "0"},
+            "justMyCode": true,
         }
     ]
 }

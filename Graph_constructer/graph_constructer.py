@@ -19,8 +19,8 @@ class GraphConstructer:
         self.cfg = cfg
         self.table_mentions = table_mentions
         self.passage_mentions = passage_mentions
-        self.index = indicies['whole']
-        self.view2entity = view2entity
+        self.index = indicies['passage']
+        self.view2entity = view2entity['passage']
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.mention_embedder = embedder
         self.device = device
@@ -82,19 +82,22 @@ class GraphConstructer:
                 mention_embeds.append(mention_embed)
                 top_k = self.cfg.top_k * 30 + 1
                 _, closest_entities = self.index.search(mention_embed, top_k)
-                cand_entities_list.append(closest_entities)
+                cand_entities = self.get_distinct_entities(closest_entities, 'topk')
+                cand_entities_list.extend(cand_entities)
                 node_ids.append(node_id)
-        mention_embeds = np.concatenate(mention_embeds, axis=0)
+        # mention_embeds = np.concatenate(mention_embeds, axis=0)
+        # cand_entities_list = np.concatenate(cand_entities_list, axis=0)
+        cand_entities_list = np.array(cand_entities_list)
         node_ids = np.concatenate(node_ids, axis=0)
-        if self.cfg.top_k is not None:
-            top_k = self.cfg.top_k * 30 + 1
-            _, closest_entities = self.index.search(mention_embeds, top_k)
-            cand_entities = self.get_distinct_entities(closest_entities, 'topk')
-        else:
-            closest_entities = self.index.range_search(x = mention_embeds, thresh = self.cfg.threshold)
-            cand_entities = self.get_distinct_entities(closest_entities, 'threshold')
+        # if self.cfg.top_k is not None:
+        #     top_k = self.cfg.top_k * 30 + 1
+        #     _, closest_entities = self.index.search(mention_embeds, top_k)
+        #     cand_entities = self.get_distinct_entities(closest_entities, 'topk')
+        # else:
+        #     closest_entities = self.index.range_search(x = mention_embeds, thresh = self.cfg.threshold)
+        #     cand_entities = self.get_distinct_entities(closest_entities, 'threshold')
         entity_linking_result  = {}
-        for node_id, cand_idx in zip(node_ids, cand_entities):
+        for node_id, cand_idx in zip(node_ids, cand_entities_list):
             entity_linking_result[node_id] = cand_idx
         return entity_linking_result
 
@@ -104,7 +107,7 @@ class GraphConstructer:
         for i in range(mention_num):
             pred_entity_idx = [eidx for eidx in closest_entities[i][1:]]
             if self.view2entity is not None:
-                pred_entity_idx = [self.view2entity[eidx] for eidx in closest_entities[i][1:]]
+                pred_entity_idx = [self.view2entity[str(eidx)] for eidx in closest_entities[i][1:]]
             new_pred_entity_idx = list()
             for item in pred_entity_idx:
                 if type == 'topk':
@@ -136,6 +139,7 @@ class GraphConstructer:
                                 node_id=mention_dict['node_id'],
                                 row_id= mention_dict['row_id'] if data_type == 'table' else None,
                                 mention_ids=mention_ids,
+                                mention_id=mention_id,
                                 mention_tokens = mention_tokens,
                                 data_type = data_type)
                                 )
@@ -223,10 +227,10 @@ def main(cfg: DictConfig):
         with open(cfg.table_graph_path, 'w') as fout:
             json.dump(table_graph, fout, indent=4)
 
-    passage_graph = graph_constructer.construct('passage')
-    if not os.path.exists(cfg.passage_graph_path):
-        with open(cfg.passage_graph_path, 'w') as fout:
-            json.dump(passage_graph, fout, indent=4)
+    # passage_graph = graph_constructer.construct('passage')
+    # if not os.path.exists(cfg.passage_graph_path):
+    #     with open(cfg.passage_graph_path, 'w') as fout:
+    #         json.dump(passage_graph, fout, indent=4)
 
 if __name__ == "__main__":
     main()

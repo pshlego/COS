@@ -47,21 +47,24 @@ class IndexBuilder:
         gc.collect()
         entity_embedding = new_entity_embedding
         dim = entity_embedding.shape[1]
-        gpu_resource = faiss.StandardGpuResources()
         # Build ANN Index
         indicies={}
-        for data_type in ['table', 'passage', 'whole']:
+        for data_type in ['passage']:
             if data_type == 'whole':
                 new_embedding = entity_embedding
             else:
                 new_embedding = entity_embedding[data_type_idx[data_type][0]:data_type_idx[data_type][1]]
-            cpu_index = faiss.IndexFlatIP(dim)
             if self.cfg.is_gpu:
-                index = faiss.index_cpu_to_gpu(gpu_resource, 0, cpu_index)
+                ngpus = faiss.get_num_gpus()
+                print("number of GPUs:", ngpus)
+                index_flat = faiss.IndexFlatIP(dim) 
+                co = faiss.GpuMultipleClonerOptions()
+                co.shard = True
+                index = faiss.index_cpu_to_all_gpus(index_flat, co, ngpu=ngpus)
             else:
-                index = cpu_index
+                index = faiss.IndexFlatIP(dim)
             indicies[data_type] = index
-            indicies[data_type].add(new_embedding.astype(np.float32))
+            indicies[data_type].add(new_embedding.astype('float32'))
         return indicies, view2entity
     
     def get_entity_embedding(self,):

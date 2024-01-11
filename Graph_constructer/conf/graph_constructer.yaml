@@ -21,8 +21,8 @@ do_index_building: True
 # Run on gpus
 no_cuda: False
 
-batch_size: 512
+batch_size: 256
 
-top_k: 1
+top_k: 5
 threshold: 0.95
 max_seq_length: 128

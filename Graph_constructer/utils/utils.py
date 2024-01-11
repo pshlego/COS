@@ -11,7 +11,8 @@ class MentionInfo(object):
             mention_tokens:List[str]=None,
             data_type:str='all',
             node_id:Optional[int]=None,
-            row_id:Optional[int]=None
+            row_id:Optional[int]=None,
+            mention_id:Optional[int]=None,
             ):
         self.datum_mention = datum_mention
         self.node_id = node_id
@@ -19,6 +20,7 @@ class MentionInfo(object):
         self.mention_ids = mention_ids
         self.mention_tokens = mention_tokens
         self.data_type = data_type
+        self.mention_id = mention_id
 
 class EntityDataset(Dataset):
     
