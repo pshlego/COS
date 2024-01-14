@@ -20,12 +20,12 @@ verbalized_kb:
 
 ott_table:
   _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
-  file: /mnt/sdd/shpark/cos/data/knowledge/ott_table_chunks_original.json
+  file: /mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json
   id_prefix: 'ott-original:'
 
 ott_wiki_passages:
   _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
-  file: /mnt/sdd/shpark/cos/data/knowledge/ott_wiki_passages.json
+  file: /mnt/sdd/shpark/cos/knowledge/ott_wiki_passages.json
   id_prefix: 'ott-wiki:'
 
 wiki_hotpot:

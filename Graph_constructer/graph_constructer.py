@@ -9,16 +9,17 @@ from view_generator import ViewGenerator
 from index_builder import IndexBuilder
 from transformers import BertTokenizer
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
-from utils.utils import process_mention, MentionInfo
+from utils.utils import process_mention, MentionInfo, prepare_datasource
 import numpy as np
 import pickle
+from pymongo import MongoClient
 
 class GraphConstructer:
-    def __init__(self, cfg, table_mentions, passage_mentions, indicies, view2entity, embedder, device):
+    def __init__(self, cfg, table_mentions_cursor, passage_mentions_cursor, indicies, view2entity, embedder, device):
         # TODO: Change the cfg according to the below code.
         self.cfg = cfg
-        self.table_mentions = table_mentions
-        self.passage_mentions = passage_mentions
+        self.table_mentions = table_mentions_cursor
+        self.passage_mentions = passage_mentions_cursor
         self.index = indicies['passage']
         self.view2entity = view2entity['passage']
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -48,6 +49,7 @@ class GraphConstructer:
             mention_queries_path = self.cfg.table_mention_queries_path
             os.makedirs(os.path.dirname(mention_queries_path), exist_ok=True)
             if not os.path.exists(mention_queries_path):
+                mention_queries = self.prepare_queries(data_type)
                 with open(mention_queries_path, 'wb') as handle:
                     pickle.dump(mention_queries, handle, protocol=pickle.HIGHEST_PROTOCOL)
             else:
@@ -84,21 +86,25 @@ class GraphConstructer:
                 _, closest_entities = self.index.search(mention_embed, top_k)
                 cand_entities = self.get_distinct_entities(closest_entities, 'topk')
                 cand_entities_list.extend(cand_entities)
-                node_ids.append(node_id)
+                node_ids.extend(node_id.tolist())
+                
         # mention_embeds = np.concatenate(mention_embeds, axis=0)
         # cand_entities_list = np.concatenate(cand_entities_list, axis=0)
-        cand_entities_list = np.array(cand_entities_list)
-        node_ids = np.concatenate(node_ids, axis=0)
-        # if self.cfg.top_k is not None:
-        #     top_k = self.cfg.top_k * 30 + 1
-        #     _, closest_entities = self.index.search(mention_embeds, top_k)
-        #     cand_entities = self.get_distinct_entities(closest_entities, 'topk')
-        # else:
-        #     closest_entities = self.index.range_search(x = mention_embeds, thresh = self.cfg.threshold)
-        #     cand_entities = self.get_distinct_entities(closest_entities, 'threshold')
-        entity_linking_result  = {}
-        for node_id, cand_idx in zip(node_ids, cand_entities_list):
-            entity_linking_result[node_id] = cand_idx
+        entity_linking_result  = []
+        node_list = []
+        entity_linking_dict = {}
+        for node_id, cand_idx in tqdm(zip(node_ids, cand_entities_list), total=len(node_ids)):
+            if node_id not in node_list:
+                if int(node_id) != 0:
+                    entity_linking_result.append(entity_linking_dict)
+                node_list.append(node_id)
+                entity_linking_dict = {}
+                entity_linking_dict['node_id'] = node_id
+                entity_linking_dict['linked_entities'] = []
+            mention_dict = {}
+            mention_dict['mention_id'] = len(entity_linking_dict['linked_entities'])
+            mention_dict['linked_entity'] = cand_idx
+            entity_linking_dict['linked_entities'].append(mention_dict)
         return entity_linking_result
 
     def get_distinct_entities(self, closest_entities, type):
@@ -128,7 +134,7 @@ class GraphConstructer:
             data_mention = self.passage_mentions
         for datum_mention in tqdm(data_mention, desc="Preparing queries"):
             mentions = datum_mention['grounding']
-            for mention_id, mention_dict in enumerate(mentions):
+            for id, mention_dict in enumerate(mentions):
                 if 'row_id' in mention_dict.keys():
                     data_type = 'table'
                 else:
@@ -139,7 +145,7 @@ class GraphConstructer:
                                 node_id=mention_dict['node_id'],
                                 row_id= mention_dict['row_id'] if data_type == 'table' else None,
                                 mention_ids=mention_ids,
-                                mention_id=mention_id,
+                                mention_id=mention_dict['mention_id'],
                                 mention_tokens = mention_tokens,
                                 data_type = data_type)
                                 )
@@ -152,76 +158,65 @@ def main(cfg: DictConfig):
             "cuda" if torch.cuda.is_available() and not cfg.no_cuda else "cpu")
     n_gpu = torch.cuda.device_count()
     
-    # Prepare data
-    all_tables_path = cfg.ctx_sources[cfg.ctx_src_table]['file']
-    all_passages_path = cfg.ctx_sources[cfg.ctx_src_passage]['file']
-    all_tables = None
-    all_passages = None
+    # Set MongoDB
+    client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
+    mongodb = client[cfg.dbname]
     
     # Preprocess data
-    ## Mention detection (Named Entity Recognition)
+    ## Mention detection
     mention_detector_cfg = hydra.compose(config_name='mention_detector')
+    
     table_mention_path = mention_detector_cfg.table_mention_path
+    table_mention_collection_name = os.path.basename(table_mention_path).split('.')[0]
     os.makedirs(os.path.dirname(table_mention_path), exist_ok=True)
+    
     passage_mention_path = mention_detector_cfg.passage_mention_path
+    passage_mention_collection_name = os.path.basename(passage_mention_path).split('.')[0]
     os.makedirs(os.path.dirname(passage_mention_path), exist_ok=True)
     
     if cfg.do_mention_detection:
-        if all_tables is None:
-            all_tables = json.load(open(all_tables_path, 'r'))
-        if all_passages is None:
-            all_passages = json.load(open(all_passages_path, 'r'))
-
-        mention_detector = MentionDetector(mention_detector_cfg, all_tables, all_passages)
+        mention_detector = MentionDetector(mention_detector_cfg, mongodb)
         if not os.path.exists(table_mention_path):
-            table_mention_path = mention_detector.span_proposal('table')
-        
+            all_tables = prepare_datasource(cfg, mongodb, 'table')
+            mention_detector.span_proposal(all_tables=all_tables)
         if not os.path.exists(passage_mention_path):
-            passage_mention_path = mention_detector.span_proposal('passage')
+            all_passages = prepare_datasource(cfg, mongodb, 'passage')
+            mention_detector.span_proposal(all_passages=all_passages)
     
-    ## Decompose descriptions into Hierarchical views
+    ## Decompose descriptions into hierarchical views
     view_generator_cfg = hydra.compose(config_name='view_generator')
+    
     table_view_path = view_generator_cfg.table_view_path
+    table_view_collection_name = os.path.basename(table_view_path).split('.')[0]
     os.makedirs(os.path.dirname(table_view_path), exist_ok=True)
+    
     passage_view_path = view_generator_cfg.passage_view_path
+    passage_view_collection_name = os.path.basename(passage_view_path).split('.')[0]
     os.makedirs(os.path.dirname(passage_view_path), exist_ok=True)
     
     if cfg.do_view_generation:
-        if all_tables is None:
-            all_tables = json.load(open(all_tables_path, 'r'))
-        if all_passages is None:
-            all_passages = json.load(open(all_passages_path, 'r'))
-
-        view_generator = ViewGenerator(view_generator_cfg, all_tables, all_passages)
+        view_generator = ViewGenerator(view_generator_cfg, mongodb)
         if not os.path.exists(table_view_path):
-            table_view_path = view_generator.generate('table')
-            
+            if all_tables is None:
+                all_tables = prepare_datasource(cfg, mongodb, 'table')
+            view_generator.generate(all_tables=all_tables)
         if not os.path.exists(passage_view_path):
-            passage_view_path = view_generator.generate('passage')
+            if all_passages is None:
+                all_passages = prepare_datasource(cfg, mongodb, 'passage')
+            view_generator.generate(all_passages=all_passages)
 
-        with open(table_view_path, 'r') as file:
-            table_views = json.load(file)
-
-        with open(passage_view_path, 'r') as file:
-            passage_views = json.load(file)
-    else:
-        table_views = None
-        passage_views = None
     # Construct graph
     ## Build index for all views
-    if cfg.do_index_building:
-        index_builder_cfg = hydra.compose(config_name='index_builder')
-        index_builder = IndexBuilder(index_builder_cfg, table_views, passage_views, device, n_gpu)
-        indicies, view2entity = index_builder.build()
-
+    index_builder_cfg = hydra.compose(config_name='index_builder')
+    table_views_cursor = mongodb[table_view_collection_name].find()
+    passage_views_cursor = mongodb[passage_view_collection_name].find()
+    index_builder = IndexBuilder(index_builder_cfg, table_views_cursor, passage_views_cursor, device, n_gpu)
+    indicies, view2entity = index_builder.build()
     ## Link mentions to views with index
-    with open(table_mention_path, 'r') as file:
-        table_mentions = json.load(file)
-
-    with open(passage_mention_path, 'r') as file:
-        passage_mentions = json.load(file)
     
-    graph_constructer = GraphConstructer(cfg, table_mentions, passage_mentions, indicies, view2entity, index_builder.embedder, device)
+    table_mentions_cursor = mongodb[table_mention_collection_name].find()
+    passage_mentions_cursor = mongodb[passage_mention_collection_name].find()
+    graph_constructer = GraphConstructer(cfg, table_mentions_cursor, passage_mentions_cursor, indicies, view2entity, index_builder.embedder, device)
     table_graph = graph_constructer.construct('table')
     if not os.path.exists(cfg.table_graph_path):
         with open(cfg.table_graph_path, 'w') as fout:

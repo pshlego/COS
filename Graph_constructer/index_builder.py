@@ -12,25 +12,10 @@ import numpy as np
 from utils.model import RetrievalModel,TeacherModel,MVD
 
 class IndexBuilder:
-    def __init__(self, cfg, table_views, passage_views, device, n_gpu):
+    def __init__(self, cfg, table_views_cursor, passage_views_cursor, device, n_gpu):
         self.cfg = cfg
-        self.table_views = table_views
-        self.passage_views = passage_views
-        self.local_views = dict()
-        self.global_views = dict()
-        self.local_views['table'] = list()
-        self.global_views['table'] = list()
-        self.local_views['passage'] = list()
-        self.global_views['passage'] = list()
-        if self.table_views is not None:
-            for view in self.table_views['doc_list']:
-                self.local_views['table'].append(view['local_ids'])
-                self.global_views['table'].append(view['global_ids'])
-        if self.passage_views is not None:
-            for view in self.passage_views['doc_list']:
-                self.local_views['passage'].append(view['local_ids'])
-                self.global_views['passage'].append(view['global_ids'])
-
+        self.table_views = table_views_cursor
+        self.passage_views = passage_views_cursor
         embedder, _ = self.load_embedder(cfg)
         embedder.to(device)
         if n_gpu > 1:
@@ -99,6 +84,19 @@ class IndexBuilder:
         
     def embed_entities(self, entity_embedding_path, entity_embedding_idx_path, data_type_idx_path, view2entity_path):
         if not (os.path.exists(data_type_idx_path) and os.path.exists(view2entity_path)):
+            local_views = dict()
+            global_views = dict()
+            local_views['table'] = list()
+            global_views['table'] = list()
+            local_views['passage'] = list()
+            global_views['passage'] = list()
+            for view in self.table_views:
+                local_views['table'].append(view['local_ids'])
+                global_views['table'].append(view['global_ids'])
+            for view in self.passage_views:
+                local_views['passage'].append(view['local_ids'])
+                global_views['passage'].append(view['global_ids'])
+
             data_type_idx = dict()
             view2entity = dict()
             local_view_embeds = list()
@@ -110,7 +108,7 @@ class IndexBuilder:
                 view_idx= 0
                 entity_idx = 0
                 start_idx = num
-                for local_ids,global_ids in zip(self.local_views[data_type], self.global_views[data_type]):
+                for local_ids,global_ids in zip(local_views[data_type], global_views[data_type]):
                     entity_ids = [global_ids] + local_ids
                     view_num = len(entity_ids)
                     for i in range(view_num):

@@ -411,6 +411,7 @@ def chain_of_skills(cfg: DictConfig):
     else:
         print ('split not found')
         exit(0)
+    #사전에 link된 passage들을 불러온다.
     all_links = load_links(cfg.ctx_datatsets[2])
     #100개의 table chunk 검색
     data = q_to_tables(cfg, encoder, tensorizer, gpu_index_flat, doc_ids)
@@ -435,6 +436,7 @@ def chain_of_skills(cfg: DictConfig):
 
     answer_recall = [0]*len(limits)
     tokenizer = SimpleTokenizer()
+    # passage embedding으로 변경
     cfg.encoded_ctx_files[0] = cfg.encoded_ctx_files[0].replace('ott_table_original', 'ott_wiki_linker')
     # reload the index
     encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg, sequence_length=512)  

@@ -19,12 +19,11 @@ logger = logging.getLogger()
 setup_logger(logger)
 
 class MentionDetector:
-    def __init__(self, cfg, all_tables, all_passages):
+    def __init__(self, cfg, mongodb):
         self.cfg = cfg
-        self.all_tables = all_tables
-        self.all_passages = all_passages
+        self.mongodb = mongodb
         
-    def span_proposal(self, data_type: str):
+    def span_proposal(self, all_tables = None, all_passages = None):
         cfg = setup_cfg_gpu(self.cfg)
         saved_state = load_states_from_checkpoint(cfg.model_file)
         set_cfg_params_from_state(saved_state.encoder_params, cfg)
@@ -50,8 +49,8 @@ class MentionDetector:
         model_to_load.load_state_dict(saved_state.model_dict, strict=True)
         expert_id = self.cfg.expert_id
         
-        if data_type == 'table':
-            data = self.all_tables
+        if all_tables is not None:
+            data = all_tables
             if os.path.exists(cfg.table_chunk):
                 with open(cfg.table_chunk, 'r') as file:
                     chunk_dict = json.load(file)
@@ -69,8 +68,20 @@ class MentionDetector:
                 json.dump(chunk_dict, open(cfg.table_chunk, 'w'), indent=4)
             _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_mention_context_length)
             output_name = self.cfg.table_mention_path
-        else:
-            data = self.all_passages
+            span_prediction_results = []
+            for i in tqdm(range(len(found_mentions))):
+                span_dict = {}
+                span_dict['chunk_id'] = data[i]['chunk_id']
+                span_dict['node_id'] = i
+                span_dict['grounding'] = found_mentions[i]
+                span_prediction_results.append(span_dict)
+            json.dump(span_prediction_results, open(output_name, 'w'), indent=4)
+            collection_name = os.path.basename(output_name).split('.')[0]
+            collection = self.mongodb[collection_name]
+            collection.insert_many(span_prediction_results)
+            
+        if all_passages is not None:
+            data = all_passages
             if os.path.exists(cfg.passage_chunk):
                 with open(cfg.passage_chunk, 'r') as file:
                     chunk_dict = json.load(file)
@@ -84,12 +95,18 @@ class MentionDetector:
                 json.dump(chunk_dict, open(cfg.passage_chunk, 'w'), indent=4)
             _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, passage_chunks, None, None, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_mention_context_length)
             output_name = self.cfg.passage_mention_path
-
-        for i in tqdm(range(len(found_mentions))):
-            data[i]['grounding'] = found_mentions[i]
-        json.dump(data, open(output_name, 'w'), indent=4)
-        return output_name
-
+            span_prediction_results = []
+            for i in tqdm(range(len(found_mentions))):
+                span_dict = {}
+                span_dict['chunk_id'] = data[i]['chunk_id']
+                span_dict['node_id'] = i
+                span_dict['grounding'] = found_mentions[i]
+                span_prediction_results.append(span_dict)
+            json.dump(span_prediction_results, open(output_name, 'w'), indent=4)
+            collection_name = os.path.basename(output_name).split('.')[0]
+            collection = self.mongodb[collection_name]
+            collection.insert_many(span_prediction_results)
+            
     def prepare_all_table_chunks(self, data, tokenizer):
         chunk_dict = {}
         table_chunks = []
@@ -253,6 +270,7 @@ class MentionDetector:
                             mention_dict['node_id'] = node_id_list[i]
                             mention_dict['mention'] = span
                             mention_dict['across_row'] = mid
+                            mention_dict['mention_id'] = len(mentions)
                             mentions.append(mention_dict)
                         else:
                             mention_dict['full_word_start'] = full_word_start
@@ -269,6 +287,7 @@ class MentionDetector:
                             mention_dict['context_right'] = mention_context_right.replace(' [PAD]', '')
                             
                             mention_dict['node_id'] = node_id_list[i]
+                            mention_dict['mention_id'] = len(mentions)
                             mention_dict['mention'] = span
                             mentions.append(mention_dict)
 

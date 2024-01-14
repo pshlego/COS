@@ -12,16 +12,21 @@ passage_mention_queries_path: /mnt/sdd/shpark/graph/passage_mention_queries.pkl
 table_graph_path: /mnt/sdd/shpark/graph/table_graph.json
 passage_graph_path: /mnt/sdd/shpark/graph/passage_graph.json
 
+# MongoDB
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017
+
 
 # Graph construction steps
 do_mention_detection: False
 do_view_generation: False
-do_index_building: True
 
 # Run on gpus
 no_cuda: False
 
-batch_size: 256
+batch_size: 4096
 
 top_k: 5
 threshold: 0.95

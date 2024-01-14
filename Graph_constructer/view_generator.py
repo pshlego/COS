@@ -2,50 +2,43 @@ from transformers import BertTokenizer
 import json
 from tqdm import tqdm
 import nltk
+import os
 from utils.utils import get_row_indices
 
 class ViewGenerator:
-    def __init__(self, cfg, all_tables, all_passages):
+    def __init__(self, cfg, mongodb):
         self.cfg = cfg
-        self.all_tables = all_tables
-        self.all_passages = all_passages
+        self.mongodb = mongodb
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         
-    def generate(self, data_type):
-        view = {}
-        doc_map = {}
+    def generate(self, all_tables=None, all_passages=None):
         doc_list = []
-        if data_type == 'table':
+        if all_tables is not None:
             output_name = self.cfg.table_view_path
-            data = self.all_tables
+            data = all_tables
             for chunk in tqdm(data):
                 field = {}
                 window = self.get_entity_windows(chunk, 'table')
                 field = window
-                doc_id = chunk["chunk_id"]
-                field["text"] = chunk['text'].strip()
-                field['doc_id'] = len(doc_list)
-                doc_map[doc_id] = len(doc_list)
+                field['node_id'] = len(doc_list)
                 doc_list.append(field)
-            view['doc_map'] = doc_map
-            view['doc_list'] = doc_list
-            json.dump(view, open(output_name, 'w'), indent=4)
-        else:
+            json.dump(doc_list, open(output_name, 'w'), indent=4)
+            collection_name = os.path.basename(output_name).split('.')[0]
+            collection = self.mongodb[collection_name]
+            collection.insert_many(doc_list)
+        if all_passages is not None:
             output_name = self.cfg.passage_view_path
-            data = self.all_passages
+            data = all_passages
             for chunk in tqdm(data):
                 field = {}
                 window = self.get_entity_windows(chunk, 'passage')
                 field = window
-                doc_id = chunk["chunk_id"]
-                field["text"] = chunk['text'].strip()
-                field['doc_id'] = len(doc_list)
-                doc_map[doc_id] = len(doc_list)
+                field['node_id'] = len(doc_list)
                 doc_list.append(field)
-            view['doc_map'] = doc_map
-            view['doc_list'] = doc_list
-            json.dump(view, open(output_name, 'w'), indent=4)
-        return output_name
+            json.dump(doc_list, open(output_name, 'w'), indent=4)
+            collection_name = os.path.basename(output_name).split('.')[0]
+            collection = self.mongodb[collection_name]
+            collection.insert_many(doc_list)
 
     def get_entity_windows(self, chunk, data_type):
         CLS,ENT,SEP = '[CLS]','[SEP]','[SEP]'
