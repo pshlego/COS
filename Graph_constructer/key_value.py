@@ -26,8 +26,8 @@ print("MongoDB Connected")
 # collection.insert_many(file_data)
 # print("ott_table_chunks_original.json inserted")
 
-collection = db["table_chunks_to_passages_shard0_of_1"]  # 컬렉션 선택
-file_path = "/mnt/sdd/shpark/cos/models/table_chunks_to_passages_shard0_of_1.json"
+collection = db["all_table_chunks_span_prediction_new"]  # 컬렉션 선택
+file_path = "/mnt/sdd/shpark/cos/models/all_table_chunks_span_prediction.json"
 # JSON 파일 읽기
 with open(file_path, 'r') as file:
     file_data = json.load(file)

@@ -8,6 +8,14 @@ db = client["mydatabase"]  # 데이터베이스 선택
 print("MongoDB Connected")
 # JSON 파일을 로드합니다.
 # file_path = '/mnt/sdd/shpark/cos/models/table_chunks_to_passages_shard0_of_1.json'  # 여기에 JSON 파일의 경로를 입력하세요.
+table_chunks = []
+for i in range(10):
+    file_path = f'/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard{i}_of_10.json'
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+    table_chunks.extend(data)
+collection = db["table_chunks_to_passages_shard_author"]
+collection.insert_many(table_chunks)
 # with open(file_path, 'r') as file:
 #     graph = json.load(file)
 
@@ -23,11 +31,11 @@ print(f"Loading {total_passages} passages...")
 all_tables = [doc for doc in tqdm(passage_collection.find(), total=total_passages)]
 print("finish loading passages")
 
-passage_collection = db["table_chunks_to_passages_shard0_of_1"]
-total_passages_2 = passage_collection.count_documents({})
-print(f"Loading {total_passages_2} passages...")
-table_chunks = [doc for doc in tqdm(passage_collection.find(), total=total_passages_2)]
-print("finish loading passages")
+# passage_collection = db["table_chunks_to_passages_shard0_of_1"]
+# total_passages_2 = passage_collection.count_documents({})
+# print(f"Loading {total_passages_2} passages...")
+# table_chunks = [doc for doc in tqdm(passage_collection.find(), total=total_passages_2)]
+# print("finish loading passages")
 
 page_name_to_id = {}
 for i, passage in enumerate(tqdm(all_passages)):
@@ -56,10 +64,10 @@ for entity_id, passage in enumerate(tqdm(all_tables, total=total_passages)):
         new_datum['linked_entities'] = passage["grounding"]
     new_data.append(new_datum)
 
-new_file_path = '/mnt/sdd/shpark/cos/models/table_graph_original.json'  # 여기에 JSON 파일의 경로를 입력하세요.
+new_file_path = '/mnt/sdd/shpark/cos/models/table_graph_author.json'  # 여기에 JSON 파일의 경로를 입력하세요.
 with open(new_file_path, 'w') as file:
     json.dump(new_data, file, indent=4)
-db["table_graph_original"].insert_many(new_data)
+db["table_graph_author"].insert_many(new_data)
 # new_data = []
 # for i, datum in enumerate(tqdm(graph)):
 #     datum['node_id'] = i

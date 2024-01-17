@@ -75,6 +75,19 @@
             "args":[],
             "env": {"CUDA_VISIBLE_DEVICES": "0"},
             "justMyCode": true,
+        },
+        {
+            "name": "Reader Evaluation",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/COS/FiE_reader/train_qa_fie.py",
+            "console": "integratedTerminal",
+            "python":"/home/shpark/anaconda3/envs/hf4/bin/python",
+            "args":["--do_predict", "--model_name", "google/electra-large-discriminator", "--train_batch_size", "2", "--gradient_accumulation_steps", "2", "--predict_batch_size", "1", "--output_dir", "/mnt/sdd/shpark/cos/output", "--num_train_steps", "5000", "--use_layer_lr", "--layer_decay", "0.9", "--eval-period", "500", "--learning_rate", "5e-5", "--max_ans_len", "15", "--gradient_checkpointing", "--num_ctx", "50", "--max_grad_norm", "1.0", "--train_file", "/mnt/sdd/shpark/cos/reader_data/data/results/OTT-QA/ott_train_reader.json", "--predict_file", "/mnt/sdd/shpark/cos/models/ott_dev_core_reader_hop1keep200_shard0_of_1.json", "--init_checkpoint", "/mnt/sdd/shpark/cos/models/ott_fie_checkpoint_best.pt", "--save_prediction", "dev_results"],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            },
+            "justMyCode": true,
         }
     ]
 }

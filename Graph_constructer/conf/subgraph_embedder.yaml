@@ -9,7 +9,7 @@ model_file: /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckp
 encoder_type: ctx
 
 # output .tsv file path to write results to
-out_file: /mnt/sdd/shpark/graph/embeds/star_embeds_original
+out_file: /mnt/sdd/shpark/graph/embeds/star_embeds_author
 target_expert: 1
 mean_pool: False
 # Whether to lower case the input text. Set True for uncased models, False for the cased ones.
@@ -25,7 +25,7 @@ gpu_id: -1
 num_gpus: 3
 
 # Batch size for the passage encoder forward pass (works in DataParallel mode)
-batch_size: 512
+batch_size: 2048
 
 tables_as_passages: False
 
@@ -53,15 +53,14 @@ fp16: False
 fp16_opt_level: O1
 
 # Input path
-output_path: /mnt/sdd/shpark/cos/models/preprocess_table_graph_original.json
-graph_path: /mnt/sdd/shpark/cos/models/table_graph_original.json
-graph_collection_name: table_graph_original
-passage_mention_collection: all_passage_chunks_span_prediction
+preprocessed_graph_path: /mnt/sdd/shpark/cos/models/preprocess_table_graph_author_w_score.json
+graph_path: /mnt/sdd/shpark/cos/models/table_graph_author_w_score.json
+graph_collection_name: table_graph_author_w_score
 table_mention_collection_name: all_table_chunks_span_prediction
 table_collection_name: ott_table
 passage_collection_name: ott_wiki_passages
 # Hierarchical level
-hierarchical_level: 'star' # edge
+hierarchical_level: 'edge' # edge, star
 top_k_passages: 1
 
 # MongoDB

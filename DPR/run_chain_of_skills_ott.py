@@ -171,7 +171,6 @@ def get_row_indices(question, tokenizer):
     return indices
 
 def prepare_all_table_chunks(filename, tokenizer):
-    # data = json.load(open(filename, 'r'))
     # chunk_dict = {}
     # table_chunks = []
     # table_chunk_ids = []
@@ -189,9 +188,9 @@ def prepare_all_table_chunks(filename, tokenizer):
     # chunk_dict['row_start'] = row_start
     # chunk_dict['row_indices'] = row_indices
     # json.dump(chunk_dict, open('/mnt/sdd/shpark/knowledge/ott_table_chunks_original_with_row_indices.json', 'w'), indent=4)
-    with open('/mnt/sdd/shpark/knowledge/ott_table_chunks_original_with_row_indices.json', 'r') as file:
+    with open('/mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original_with_row_indices.json', 'r') as file:
         chunk_dict = json.load(file)
-    data = chunk_dict['data']
+    data = json.load(open(filename, 'r'))
     table_chunks = chunk_dict['table_chunks']
     table_chunk_ids = chunk_dict['table_chunk_ids']
     row_start = chunk_dict['row_start']
@@ -295,7 +294,7 @@ def main_realistic_all_table_chunks(cfg: DictConfig):
             table_chunks, cells, indices, rows, cfg.batch_size, expert_id=expert_id, use_cls=False
         )
         k = 2                        
-        b_size = 2048
+        b_size = 512
         all_retrieved = []
         for i in tqdm(range(0, len(questions_tensor), b_size)):
             D, I = gpu_index_flat.search(questions_tensor[i:i+b_size].numpy(), k)  # actual search

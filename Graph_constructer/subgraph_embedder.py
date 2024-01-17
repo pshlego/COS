@@ -100,10 +100,21 @@ def gen_ctx_vectors(
             print("Encoded passages %d", total)
     return results
 
-def preprocess_graph(cfg, graph, mongodb, hierarchical_level):
-    preprocess_graph_collection_name = os.path.basename(cfg.output_path.replace('.json', f'_{hierarchical_level}.json')).split('.')[0]
+def preprocess_graph(cfg, mongodb):
+    hierarchical_level = cfg.hierarchical_level
+    preprocess_graph_collection_name = os.path.basename(cfg.preprocessed_graph_path.replace('.json', f'_{hierarchical_level}.json')).split('.')[0]
     collection_list = mongodb.list_collection_names()
     if preprocess_graph_collection_name not in collection_list:
+        graph_collection = mongodb[cfg.graph_collection_name]
+        if cfg.graph_collection_name not in mongodb.list_collection_names():
+            with open(cfg.graph_path, 'r') as fin:
+                graph = json.load(fin)
+            graph_collection.insert_many(graph)
+        else:
+            total_graphs = graph_collection.count_documents({})
+            print(f"Loading {total_graphs} graphs...")
+            graph = [doc for doc in tqdm(graph_collection.find(), total=total_graphs)]
+        print("finish loading graph")
         # Pre-fetch collections to minimize database queries
         table_collection = mongodb[cfg.table_collection_name]
         total_tables = table_collection.count_documents({})
@@ -140,18 +151,21 @@ def preprocess_graph(cfg, graph, mongodb, hierarchical_level):
                 row_mention_dict_list.append(row_mention_dict)
                 for row_id, mentions in row_dict.items():
                     row_passage_id_list = []
+                    row_passage_score_list = []
                     row_linked_passage_context = []
                     for mention in mentions:
                         linked_passage_context = []
                         mention_id = mention['mention_id']
                         try:
                             mention_linked_entity = node['linked_entities'][mention_id]['linked_entity']
+                            mention_linked_entity_scores = node['linked_entities'][mention_id]['scores']
                         except:
                             print(node_id, mention_id, len(node['linked_entities']))
                             continue
-                        for linked_passage_id in mention_linked_entity[:cfg.top_k_passages]:
+                        for id, linked_passage_id in enumerate(mention_linked_entity[:cfg.top_k_passages]):
                             if linked_passage_id not in row_passage_id_list:
                                 row_passage_id_list.append(linked_passage_id)
+                                row_passage_score_list.append(mention_linked_entity_scores[id])
                             else:
                                 continue
                             raw_passage = all_passages[linked_passage_id]
@@ -165,6 +179,7 @@ def preprocess_graph(cfg, graph, mongodb, hierarchical_level):
                         'text': row_node_context,
                         'table_id': node_id,
                         'passage_id_list': row_passage_id_list,
+                        'passage_score_list': row_passage_score_list,
                         'mention_by_mention': row_linked_passage_context
                     })
 
@@ -183,14 +198,17 @@ def preprocess_graph(cfg, graph, mongodb, hierarchical_level):
                     row_mention_dict.setdefault(mention['row_id'], []).append(mention['mention_id'])
                 row_mention_dict_list.append(row_mention_dict)
                 for row_id, mentions in row_dict.items():
-                    row_linked_passage_context = []
                     for mention in mentions:
                         linked_passage_context = []
                         mention_id = mention['mention_id']
-                        for linked_passage_id in node['linked_entities'][mention_id]['linked_entity'][:cfg.top_k_passages]:
+                        try:
+                            mention_linked_entity = node['linked_entities'][mention_id]['linked_entity']
+                        except:
+                            print(node_id, mention_id, len(node['linked_entities']))
+                            continue
+                        for linked_passage_id in mention_linked_entity[:cfg.top_k_passages]:
                             raw_passage = all_passages[linked_passage_id]
                             linked_passage_context.append(f"{raw_passage['title']} [SEP] {raw_passage['text']}")
-                        row_linked_passage_context.append(' [SEP] '.join(linked_passage_context))
 
                         mention_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(linked_passage_context)}"
                         node_list.append({
@@ -202,13 +220,13 @@ def preprocess_graph(cfg, graph, mongodb, hierarchical_level):
                             'mention_top_k': linked_passage_context
                         })
 
-        with open(cfg.output_path.replace('.json', f'_{hierarchical_level}.json'), 'w') as fout:
+        with open(cfg.preprocessed_graph_path.replace('.json', f'_{hierarchical_level}.json'), 'w') as fout:
             json.dump(node_list, fout, indent=4)
         
         preprocess_graph_collection = mongodb[preprocess_graph_collection_name]
         preprocess_graph_collection.insert_many(node_list)
         
-        with open(cfg.output_path.replace('.json', f'_{hierarchical_level}_mention.json'), 'w') as fout:
+        with open(cfg.preprocessed_graph_path.replace('.json', f'_{hierarchical_level}_mention.json'), 'w') as fout:
             json.dump(row_mention_dict_list, fout, indent=4)
 
     else:
@@ -217,39 +235,21 @@ def preprocess_graph(cfg, graph, mongodb, hierarchical_level):
         print(f"Loading {total_row_nodes} row nodes...")
         node_list = [doc for doc in tqdm(preprocess_graph_collection.find(), total=total_row_nodes)]
         print("finish loading row nodes")
-        
-        with open(cfg.output_path.replace('.json', f'_{hierarchical_level}_mention.json'), 'r') as fin:
-            row_mention_dict_list = json.load(fin)
 
-    return node_list, row_mention_dict_list
+
+
+    return node_list
 
 @hydra.main(config_path="conf", config_name="subgraph_embedder")
 def main(cfg: DictConfig):
-    # Set up device
-    device = torch.device("cuda" if torch.cuda.is_available() and not cfg.no_cuda else "cpu")
-    n_gpu = torch.cuda.device_count()
-    
     # Set MongoDB
     client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
     mongodb = client[cfg.dbname]
     
-    # load graph
-    graph_collection = mongodb[cfg.graph_collection_name]
-    if cfg.graph_collection_name not in mongodb.list_collection_names():
-        with open(cfg.graph_path, 'r') as fin:
-            graph = json.load(fin)
-        graph_collection.insert_many(graph)
-    else:
-        total_graphs = graph_collection.count_documents({})
-        print(f"Loading {total_graphs} graphs...")
-        graph = [doc for doc in tqdm(graph_collection.find(), total=total_graphs)]
-    print("finish loading graph")
-    
     # preprocess graph
-    node_list, row_mention_dict_list = preprocess_graph(cfg, graph, mongodb, cfg.hierarchical_level)
+    node_list = preprocess_graph(cfg, mongodb)
 
     # load model
-    
     cfg = setup_cfg_gpu(cfg)
     saved_state = load_states_from_checkpoint(cfg.model_file)
     set_cfg_params_from_state(saved_state.encoder_params, cfg)

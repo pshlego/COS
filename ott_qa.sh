@@ -10,7 +10,7 @@ CUDA_VISIBLE_DEVICES=0,1,2 python /home/shpark/UDT-QA/DPR/generate_dense_embeddi
 
 # Command 3
 echo "Running run_chain_of_skills_ott for span proposal..."
-CUDA_VISIBLE_DEVICES=0 python /home/shpark/COS/DPR/run_chain_of_skills_ott.py model_file=/mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt encoder.use_moe=True encoder.moe_type=mod2:attn encoder.num_expert=6 encoder.encoder_model_type=hf_cos encoded_ctx_files=[/mnt/sdd/shpark/cos/embeds/ott_table_original*] qa_dataset=/mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json do_span=True ctx_datatsets=[/mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json,/mnt/sdd/shpark/cos/knowledge/ott_wiki_passages.json,[/mnt/sdd/shpark/cos/models/table_chunks_to_passages*]] label_question=True hop1_limit=100 hop1_keep=200 batch_size=256
+CUDA_VISIBLE_DEVICES=0 python /home/shpark/COS/DPR/run_chain_of_skills_ott.py model_file=/mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt encoder.use_moe=True encoder.moe_type=mod2:attn encoder.num_expert=6 encoder.encoder_model_type=hf_cos encoded_ctx_files=[/mnt/sdd/shpark/cos/embeds/ott_table_original*] qa_dataset=/mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json do_span=True ctx_datatsets=[/mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json,/mnt/sdd/shpark/cos/knowledge/ott_wiki_passages.json,[/mnt/sdd/shpark/cos/models/table_chunks_to_passages*]] label_question=True hop1_limit=100 hop1_keep=200 batch_size=32
 
 # Command 4
 echo "Running run_chain_of_skills_ott for entity linking..."
