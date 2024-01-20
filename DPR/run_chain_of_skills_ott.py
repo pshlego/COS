@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import Tensor as T
-from run_chain_of_skills_hotpot import contrastive_generate_grounding
+from DPR.run_chain_of_skills_hotpot import contrastive_generate_grounding
 from dpr.models import init_biencoder_components, init_hf_cos_biencoder
 from dpr.options import setup_logger, setup_cfg_gpu, set_cfg_params_from_state
 from dpr.utils.data_utils import Tensorizer
@@ -25,7 +25,7 @@ import os
 from dpr.data.qa_validation import has_answer
 from dpr.utils.tokenizers import SimpleTokenizer
 from collections import defaultdict, Counter
-from run_chain_of_skills_hotpot import set_up_encoder, generate_question_vectors, rerank_hop1_results
+from DPR.run_chain_of_skills_hotpot import set_up_encoder, generate_question_vectors, rerank_hop1_results
 logger = logging.getLogger()
 setup_logger(logger)
 

@@ -2,6 +2,7 @@ import hydra
 import math
 from omegaconf import DictConfig
 from tqdm import tqdm
+import json
 from subgraph_embedder import preprocess_graph
 from pymongo import MongoClient
 from dpr.models.hf_models_cos import get_any_tensorizer
@@ -21,7 +22,6 @@ def main(cfg: DictConfig):
     tensorizer.pad_to_max = False
     # preprocess graph
     node_list = preprocess_graph(cfg, mongodb)
-
     all_nodes_dict = {}
     for chunk in node_list:
         sample_id = chunk['chunk_id']
@@ -52,10 +52,13 @@ def main(cfg: DictConfig):
         else:
             portion_list.append(0)
         length_list.append(int(a.shape[0]))
+    json.dump(length_list, open(f'/mnt/sdd/shpark/portion/length_list_{cfg.hierarchical_level}', 'w'), indent=4)
+    json.dump(portion_list, open(f'/mnt/sdd/shpark/portion/portion_list_{cfg.hierarchical_level}', 'w'), indent=4)
     print(f"max length: {max(length_list)}")
     print(f"min length: {min(length_list)}")
     print(f"mean length: {sum(length_list) / len(length_list)}")
     print(f"median length: {sorted(length_list)[len(length_list) // 2]}")
     print(f"portion of truncated: {sum(portion_list) / len(portion_list)}")
+    print(f"max portion of truncated: {max(portion_list)}")
 if __name__ == "__main__":
     main()

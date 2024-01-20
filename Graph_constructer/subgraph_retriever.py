@@ -21,37 +21,13 @@ from dpr.utils.model_utils import (
 )
 from dpr.utils.tokenizers import SimpleTokenizer
 from dpr.data.qa_validation import has_answer
+
+from DPR.run_chain_of_skills_hotpot import generate_question_vectors
+
 logger = logging.getLogger()
 setup_logger(logger)
 
-def generate_question_vectors(
-    question_encoder: torch.nn.Module,
-    tensorizer: Tensorizer,
-    questions: List[str],
-    bsz: int,
-    expert_id=None, silence=False, mean_pool=False
-) -> T:
-    n = len(questions)
-    query_vectors = []
-    with torch.no_grad():
-        if not silence:
-            iterator = tqdm(range(0, n, bsz))
-        else:
-            iterator = range(0, n, bsz)
-        for batch_start in iterator:
-            batch_questions = questions[batch_start : batch_start + bsz]
-            batch_token_tensors = [tensorizer.text_to_tensor(q) for q in batch_questions]
-
-            q_ids_batch = torch.stack(batch_token_tensors, dim=0).cuda()
-            q_seg_batch = torch.zeros_like(q_ids_batch).cuda()
-            q_attn_mask = tensorizer.get_attn_mask(q_ids_batch)
-
-            seq_out, out, _ = question_encoder(input_ids=q_ids_batch, token_type_ids=q_seg_batch, attention_mask=q_attn_mask, expert_id=expert_id)
-            query_vectors.append(out.cpu())
-
-    return torch.cat(query_vectors, dim=0)
-
-def set_up_encoder(cfg, sequence_length=None, no_index=False):
+def set_up_encoder(cfg, sequence_length = 512):
     cfg = setup_cfg_gpu(cfg)
     logger.info("CFG (after gpu  configuration):")
     logger.info("%s", OmegaConf.to_yaml(cfg))
@@ -109,9 +85,11 @@ def set_up_encoder(cfg, sequence_length=None, no_index=False):
 
     # get questions & answers
     all_context_vecs = []
-    with open(cfg.embedding_file_path, 'rb') as file:
-        embedding_file = pickle.load(file)
-        all_context_vecs.extend(embedding_file)
+    for embedding_file_path in cfg.embedding_file_path_list:
+        with open(embedding_file_path, 'rb') as file:
+            embedding_file = pickle.load(file)
+            all_context_vecs.extend(embedding_file)
+
     all_context_embeds = np.array([line[1] for line in all_context_vecs]).astype('float32')
     doc_ids = [line[0] for line in all_context_vecs]
     ngpus = faiss.get_num_gpus()
@@ -119,9 +97,7 @@ def set_up_encoder(cfg, sequence_length=None, no_index=False):
     index_flat = faiss.IndexFlatIP(all_context_embeds.shape[1]) 
     co = faiss.GpuMultipleClonerOptions()
     co.shard = True
-    gpu_index_flat = faiss.index_cpu_to_all_gpus(  # build the index
-    index_flat, co, ngpu=ngpus
-    )
+    gpu_index_flat = faiss.index_cpu_to_all_gpus(index_flat, co, ngpu=ngpus)
     gpu_index_flat.add(all_context_embeds)
     
     return encoder, tensorizer, gpu_index_flat, doc_ids
@@ -146,9 +122,11 @@ def sort_page_ids_by_scores(page_ids, page_scores):
 
 @hydra.main(config_path="conf", config_name="subgraph_retriever")
 def main(cfg: DictConfig):
-    encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg)
+    # mongodb setup
     client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
     mongodb = client[cfg.dbname]
+    
+    # load dataset
     table_collection = mongodb[cfg.table_collection_name]
     total_tables = table_collection.count_documents({})
     print(f"Loading {total_tables} tables...")
@@ -158,17 +136,24 @@ def main(cfg: DictConfig):
     passage_collection = mongodb[cfg.passage_collection_name]
     total_passages = passage_collection.count_documents({})
     print(f"Loading {total_passages} passages...")
-    all_passages = [doc for doc in tqdm(passage_collection.find(), total=total_passages)]
+    all_passages = {doc['chunk_id']:doc for doc in tqdm(passage_collection.find(), total=total_passages)}
     print("finish loading passages")
+    graphs = {}
+    
+    for graph_collection_name in cfg.graph_collection_name_list:
+        graph_collection = mongodb[graph_collection_name]
+        total_graphs = graph_collection.count_documents({})
+        print(f"Loading {total_graphs} graphs...")
+        
+        for doc in tqdm(graph_collection.find(), total=total_graphs):
+            graphs[doc['chunk_id']] = doc
 
-    graph_collection = mongodb[cfg.graph_collection_name]
-    total_graphs = graph_collection.count_documents({})
-    print(f"Loading {total_passages} passages...")
-    graphs = {doc['chunk_id']: doc for doc in tqdm(graph_collection.find(), total=total_graphs)}
-    print("finish loading passages")
+    print("finish loading graphs")
 
+    # load encoder and index
     encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg)
     print('encoder set up')
+    
     limits = [1, 5, 10, 20, 50, 100]
 
     answer_recall = [0]*len(limits)
@@ -178,10 +163,12 @@ def main(cfg: DictConfig):
         logger.info("Setting expert_id=0")
         expert_id = 0
         logger.info(f"mean pool {cfg.mean_pool}")
+    
     data = build_query(cfg.qa_dataset_path)
     questions_tensor = generate_question_vectors(encoder, tensorizer,
         [s['question'] for s in data], cfg.batch_size, expert_id=expert_id, mean_pool=cfg.mean_pool
     )
+    
     assert questions_tensor.shape[0] == len(data)
     
     k = 100                         
@@ -192,6 +179,7 @@ def main(cfg: DictConfig):
         D, I = gpu_index_flat.search(questions_tensor[i:i+b_size].cpu().numpy(), k)
         original_sample = data[i]
         all_included = []
+        full_text_set = set()
         for j, ind in enumerate(I):
             for m, id in enumerate(ind):
                 subgraph = graphs[doc_ids[id]]
@@ -200,7 +188,7 @@ def main(cfg: DictConfig):
                 full_text = table['text']
                 rows = table['text'].split('\n')[1:]
                 header = table['text'].split('\n')[0]
-                row_id = int(doc_ids[id].split('_')[-1])
+                row_id = int(doc_ids[id].split('_')[1])
                 if 'answers' in original_sample:
                     pasg_has_answer = has_answer(original_sample['answers'], full_text, tokenizer, 'string')
                 else:
@@ -208,10 +196,17 @@ def main(cfg: DictConfig):
                 if len(all_included) == k:
                     break
                 all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m])})
-                sorted_passage_id_list = sort_page_ids_by_scores(subgraph['passage_id_list'], subgraph['passage_score_list'])
-                for passage_id in sorted_passage_id_list:
+                # star case
+                if 'passage_score_list' in subgraph:
+                    passage_id_list = sort_page_ids_by_scores(subgraph['passage_chunk_id_list'], subgraph['passage_score_list'])
+                else:
+                    passage_id_list = subgraph['passage_chunk_id_list']
+                for passage_id in passage_id_list:
                     passage = all_passages[passage_id]
                     full_text = header + '\n' + rows[row_id] + '\n' + passage['title'] + ' ' + passage['text']
+                    if full_text in full_text_set:
+                        continue
+                    full_text_set.add(full_text)
                     if 'answers' in original_sample:
                         pasg_has_answer = has_answer(original_sample['answers'], full_text, tokenizer, 'string')
                     else:
@@ -221,14 +216,19 @@ def main(cfg: DictConfig):
                     all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m])})
         
         original_sample['ctxs'] = all_included
+        
         for l, limit in enumerate(limits):
+            
             if any([ctx['has_answer'] for ctx in all_included[:limit]]):
                 answer_recall[l] += 1
+
         new_data.append(original_sample)
+
     for l, limit in enumerate(limits):
         print ('answer recall', limit, answer_recall[l]/len(data))
 
-    with open('/'.join(cfg.model_file.split('/')[:-1]) + f'/original_graph_query_results_author.json', 'w') as f:
+    with open(cfg.result_path, 'w') as f:
         json.dump(new_data, f, indent=4)
+
 if __name__ == "__main__":
     main()

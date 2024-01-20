@@ -1,4 +1,3 @@
-import hydra
 import logging
 import torch
 import json
@@ -15,6 +14,7 @@ from dpr.utils.data_utils import Tensorizer
 from dpr.models import init_biencoder_components
 from tqdm import tqdm
 from utils.utils import check_across_row, locate_row, get_row_indices
+
 logger = logging.getLogger()
 setup_logger(logger)
 
@@ -23,15 +23,72 @@ class MentionDetector:
         self.cfg = cfg
         self.mongodb = mongodb
         
-    def span_proposal(self, all_tables = None, all_passages = None):
+    def detect(self, data, source_type):
+        # use single GPU
+        os.environ["CUDA_VISIBLE_DEVICES"] = f"{self.cfg.device_id}"
+        
+        encoder, tensorizer = self.setup_encoder()
+        expert_id = self.cfg.expert_id
+        
+        chunk_path = self.cfg[source_type]['chunk_path']
+        
+        if os.path.exists(chunk_path):
+            with open(chunk_path, 'r') as file:
+                chunk_dict = json.load(file)
+            
+            chunks = chunk_dict['chunks']
+            chunk_ids = chunk_dict['chunk_ids']
+            
+            if source_type == 'table':
+                row_start = chunk_dict['row_start']
+                row_indices = chunk_dict['row_indices']
+        else:
+            chunk_dict = {}
+            
+            chunks, chunk_ids, row_start, row_indices = self.prepare_chunks(data, tensorizer.tokenizer, source_type)
+            chunk_dict['chunks'] = chunks
+            chunk_dict['chunk_ids'] = chunk_ids
+            
+            if source_type == 'table':
+                chunk_dict['row_start'] = row_start
+                chunk_dict['row_indices'] = row_indices
+        
+            json.dump(chunk_dict, open(chunk_path, 'w'), indent=4)
+        
+        if source_type == 'table':
+            _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, chunks, row_start, row_indices, self.cfg.batch_size, expert_id = expert_id, max_length = self.cfg.max_mention_context_length)
+        else:
+            _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, chunks, None, None, self.cfg.batch_size, expert_id = expert_id, max_length = self.cfg.max_mention_context_length)
+            
+        result_path = self.cfg[source_type]['result_path']
+        span_prediction_results = []
+        
+        for i in tqdm(range(len(found_mentions))):
+            span_dict = data[i]
+            if '_id' in span_dict:
+                del span_dict['_id']
+            span_dict['node_id'] = i
+            span_dict['grounding'] = found_mentions[i]
+            span_prediction_results.append(span_dict)
+        
+        json.dump(span_prediction_results, open(result_path, 'w'), indent=4)
+        collection_name = os.path.basename(result_path).split('.')[0]
+        collection = self.mongodb[collection_name]
+        collection.insert_many(span_prediction_results)
+        return span_prediction_results
+    
+    def setup_encoder(self, ):
         cfg = setup_cfg_gpu(self.cfg)
+        cfg.n_gpu = 1
         saved_state = load_states_from_checkpoint(cfg.model_file)
         set_cfg_params_from_state(saved_state.encoder_params, cfg)
+        
         cfg.encoder.encoder_model_type = 'hf_cos'
         sequence_length = 512
         cfg.encoder.sequence_length = sequence_length
         cfg.encoder.pretrained_file=None
         cfg.encoder.pretrained_model_cfg = 'bert-base-uncased'
+        
         tensorizer, encoder, _ = init_biencoder_components(
             cfg.encoder.encoder_model_type, cfg, inference_only=True
         )
@@ -39,96 +96,36 @@ class MentionDetector:
             encoder, None, cfg.device, cfg.n_gpu, cfg.local_rank, cfg.fp16
         )
         encoder.eval()
+        
         # load weights from the model file
         model_to_load = get_model_obj(encoder)
         logger.info("Loading saved model state ...")
+        
         if 'question_model.encoder.embeddings.position_ids' not in saved_state.model_dict:
             if 'question_model.encoder.embeddings.position_ids' in model_to_load.state_dict():
                 saved_state.model_dict['question_model.encoder.embeddings.position_ids'] = model_to_load.state_dict()['question_model.encoder.embeddings.position_ids']
                 saved_state.model_dict['ctx_model.encoder.embeddings.position_ids'] = model_to_load.state_dict()['ctx_model.encoder.embeddings.position_ids']
         model_to_load.load_state_dict(saved_state.model_dict, strict=True)
-        expert_id = self.cfg.expert_id
         
-        if all_tables is not None:
-            data = all_tables
-            if os.path.exists(cfg.table_chunk):
-                with open(cfg.table_chunk, 'r') as file:
-                    chunk_dict = json.load(file)
-                table_chunks = chunk_dict['table_chunks']
-                table_chunk_ids = chunk_dict['table_chunk_ids']
-                row_start = chunk_dict['row_start']
-                row_indices = chunk_dict['row_indices']
-            else:
-                chunk_dict = {}
-                table_chunks, table_chunk_ids, row_start, row_indices = self.prepare_all_table_chunks(data, tensorizer.tokenizer)
-                chunk_dict['table_chunks'] = table_chunks
-                chunk_dict['table_chunk_ids'] = table_chunk_ids
-                chunk_dict['row_start'] = row_start
-                chunk_dict['row_indices'] = row_indices
-                json.dump(chunk_dict, open(cfg.table_chunk, 'w'), indent=4)
-            _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_mention_context_length)
-            output_name = self.cfg.table_mention_path
-            span_prediction_results = []
-            for i in tqdm(range(len(found_mentions))):
-                span_dict = {}
-                span_dict['chunk_id'] = data[i]['chunk_id']
-                span_dict['node_id'] = i
-                span_dict['grounding'] = found_mentions[i]
-                span_prediction_results.append(span_dict)
-            json.dump(span_prediction_results, open(output_name, 'w'), indent=4)
-            collection_name = os.path.basename(output_name).split('.')[0]
-            collection = self.mongodb[collection_name]
-            collection.insert_many(span_prediction_results)
-            
-        if all_passages is not None:
-            data = all_passages
-            if os.path.exists(cfg.passage_chunk):
-                with open(cfg.passage_chunk, 'r') as file:
-                    chunk_dict = json.load(file)
-                passage_chunks = chunk_dict['passage_chunks']
-                passage_chunk_ids = chunk_dict['passage_chunk_ids']
-            else:
-                chunk_dict = {}
-                passage_chunks, passage_chunk_ids = self.prepare_all_passage_chunks(data)
-                chunk_dict['passage_chunks'] = passage_chunks
-                chunk_dict['passage_chunk_ids'] = passage_chunk_ids
-                json.dump(chunk_dict, open(cfg.passage_chunk, 'w'), indent=4)
-            _, found_mentions = self.contrastive_generate_grounding(encoder, tensorizer, passage_chunks, None, None, cfg.batch_size, expert_id=expert_id, max_length=cfg.max_mention_context_length)
-            output_name = self.cfg.passage_mention_path
-            span_prediction_results = []
-            for i in tqdm(range(len(found_mentions))):
-                span_dict = {}
-                span_dict['chunk_id'] = data[i]['chunk_id']
-                span_dict['node_id'] = i
-                span_dict['grounding'] = found_mentions[i]
-                span_prediction_results.append(span_dict)
-            json.dump(span_prediction_results, open(output_name, 'w'), indent=4)
-            collection_name = os.path.basename(output_name).split('.')[0]
-            collection = self.mongodb[collection_name]
-            collection.insert_many(span_prediction_results)
-            
-    def prepare_all_table_chunks(self, data, tokenizer):
-        chunk_dict = {}
-        table_chunks = []
-        table_chunk_ids = []
+        return encoder, tensorizer
+
+    def prepare_chunks(self, data, tokenizer, source_type):
+        chunks = []
+        chunk_ids = []
         row_start = []
         row_indices = []
-        for chunk in tqdm(data):
-            table_chunks.append(chunk['title'] + ' [SEP] ' + chunk['text'])
-            table_chunk_ids.append(chunk['chunk_id'])
-            table_row_indices = get_row_indices(chunk['title'] + ' [SEP] ' + chunk['text'], tokenizer)
-            row_start.append(table_row_indices[0])
-            row_indices.append(table_row_indices[1:])
-        return table_chunks, table_chunk_ids, row_start, row_indices
 
-    def prepare_all_passage_chunks(self, data):
-        passage_chunks = []
-        passage_chunk_ids = []
         for chunk in tqdm(data):
-            passage_chunks.append(chunk['title'] + ' [SEP] ' + chunk['text'])
-            passage_chunk_ids.append(chunk['chunk_id'])
-        return passage_chunks, passage_chunk_ids
-
+            chunks.append(chunk['title'] + ' [SEP] ' + chunk['text'])
+            chunk_ids.append(chunk['chunk_id'])
+            
+            if source_type == 'table':
+                table_row_indices = get_row_indices(chunk['title'] + ' [SEP] ' + chunk['text'], tokenizer)
+                row_start.append(table_row_indices[0])
+                row_indices.append(table_row_indices[1:])
+        
+        return chunks, chunk_ids, row_start, row_indices
+    
     def contrastive_generate_grounding(
         self,
         encoder: torch.nn.Module,

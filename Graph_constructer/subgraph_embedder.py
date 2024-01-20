@@ -18,6 +18,8 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
+from DPR.generate_dense_embeddings import gen_ctx_vectors
+
 from dpr.data.biencoder_data import BiEncoderPassage
 from dpr.models import init_biencoder_components, init_hf_cos_biencoder
 from dpr.options import set_cfg_params_from_state, setup_cfg_gpu, setup_logger
@@ -33,72 +35,6 @@ from dpr.utils.model_utils import (
 )
 import logging
 logging.disable(logging.WARNING)
-def mean_pooling(token_embeddings, mask):
-    token_embeddings = token_embeddings.masked_fill(~mask[..., None].bool(), 0.)
-    sentence_embeddings = token_embeddings.sum(dim=1) / mask.sum(dim=1)[..., None]
-    return sentence_embeddings
-
-def gen_ctx_vectors(
-    cfg: DictConfig,
-    ctx_rows: List[Tuple[object, BiEncoderPassage]],
-    model: nn.Module,
-    tensorizer: Tensorizer,
-    insert_title: bool = True, expert_id=None
-) -> List[Tuple[object, np.array]]:
-    n = len(ctx_rows)
-    bsz = cfg.batch_size
-    total = 0
-    results = []
-    for j, batch_start in tqdm(enumerate(range(0, n, bsz)), total=n // bsz):
-        batch = ctx_rows[batch_start : batch_start + bsz]
-        batch_token_tensors = [
-            tensorizer.text_to_tensor(
-                ctx[1].text, title=ctx[1].title if insert_title else None
-            )
-            for ctx in batch
-        ]
-
-        ctx_ids_batch = move_to_device(
-            torch.stack(batch_token_tensors, dim=0), cfg.device
-        )
-        ctx_seg_batch = move_to_device(torch.zeros_like(ctx_ids_batch), cfg.device)
-        ctx_attn_mask = move_to_device(
-            tensorizer.get_attn_mask(ctx_ids_batch), cfg.device
-        )
-        with torch.no_grad():
-            if expert_id is None:
-                outputs = model(ctx_ids_batch, ctx_seg_batch, ctx_attn_mask)
-            else:
-                outputs = model(ctx_ids_batch, ctx_seg_batch, ctx_attn_mask, expert_id=expert_id)
-            if cfg.mean_pool:
-                out = mean_pooling(outputs[0], ctx_attn_mask)
-            else:
-                out = outputs[1]
-        out = out.cpu()
-
-        ctx_ids = [r[0] for r in batch]
-        extra_info = []
-        if len(batch[0]) > 3:
-            extra_info = [r[3:] for r in batch]
-
-        assert len(ctx_ids) == out.size(0)
-        total += len(ctx_ids)
-
-        # TODO: refactor to avoid 'if'
-        if extra_info:
-            results.extend(
-                [
-                    (ctx_ids[i], out[i].view(-1).numpy(), *extra_info[i])
-                    for i in range(out.size(0))
-                ]
-            )
-        else:
-            results.extend(
-                [(ctx_ids[i], out[i].view(-1).numpy()) for i in range(out.size(0))]
-            )
-        if total % 10 == 0:
-            print("Encoded passages %d", total)
-    return results
 
 def preprocess_graph(cfg, mongodb):
     hierarchical_level = cfg.hierarchical_level
@@ -108,13 +44,17 @@ def preprocess_graph(cfg, mongodb):
         graph_collection = mongodb[cfg.graph_collection_name]
         if cfg.graph_collection_name not in mongodb.list_collection_names():
             with open(cfg.graph_path, 'r') as fin:
-                graph = json.load(fin)
-            graph_collection.insert_many(graph)
+                data = json.load(fin)
+            graph_collection.insert_many(data)
+            total_graphs = graph_collection.count_documents({})
+            print(f"Loading {total_graphs} graphs...")
+            graph = {doc['table_chunk_id']: doc for doc in tqdm(graph_collection.find(), total=total_graphs)}
         else:
             total_graphs = graph_collection.count_documents({})
             print(f"Loading {total_graphs} graphs...")
-            graph = [doc for doc in tqdm(graph_collection.find(), total=total_graphs)]
+            graph = {doc['table_chunk_id']: doc for doc in tqdm(graph_collection.find(), total=total_graphs)}
         print("finish loading graph")
+        
         # Pre-fetch collections to minimize database queries
         table_collection = mongodb[cfg.table_collection_name]
         total_tables = table_collection.count_documents({})
@@ -125,99 +65,130 @@ def preprocess_graph(cfg, mongodb):
         passage_collection = mongodb[cfg.passage_collection_name]
         total_passages = passage_collection.count_documents({})
         print(f"Loading {total_passages} passages...")
-        all_passages = [doc for doc in tqdm(passage_collection.find(), total=total_passages)]
+        all_passages = {doc['chunk_id']: doc for doc in tqdm(passage_collection.find(), total=total_passages)}
         print("finish loading passages")
         
         table_mention_collection = mongodb[cfg.table_mention_collection_name]
         total_table_mentions = table_mention_collection.count_documents({})
         print(f"Loading {total_table_mentions} table mentions...")
-        table_mentions = [doc for doc in tqdm(table_mention_collection.find(), total=total_table_mentions)]
+        node_id_to_chunk_id = {doc['node_id']:doc['chunk_id'] for doc in tqdm(table_mention_collection.find(), total=total_table_mentions)}
         print("finish loading table mentions")
+        
         node_list = []
-        row_mention_dict_list = []
         if hierarchical_level == 'star':
-            for node in tqdm(graph, total=len(graph)):
-                node_id = node['node_id']
-                mention_info = table_mentions[node_id]
-                raw_table = all_tables[node_id]
+            for node_id, raw_table in tqdm(enumerate(all_tables), total=len(all_tables)):
+                table_chunk_id = node_id_to_chunk_id[node_id]
                 table_title = raw_table['title']
                 column_names, *table_rows = raw_table['text'].split('\n')
-                grounding_info = mention_info['grounding']
+                try:
+                    node = graph[table_chunk_id]
+                except:
+                    for row_id, table_row in enumerate(table_rows):
+                        row_node_context = f"{column_names} [SEP] {table_row}"
+                        node_list.append({
+                        'chunk_id': f'{node_id}_{row_id}',
+                        'title': table_title,
+                        'text': row_node_context,
+                        'table_id': node_id,
+                        'passage_chunk_id_list': [],
+                        'passage_score_list': [],
+                        'mention_by_mention': []
+                        })
+                    continue
+                grounding_info = node['results']
                 row_dict = {}
-                row_mention_dict = {}
-                for mention in grounding_info:
-                    row_dict.setdefault(mention['row_id'], []).append(mention)
-                    row_mention_dict.setdefault(mention['row_id'], []).append(mention['mention_id'])
-                row_mention_dict_list.append(row_mention_dict)
+                for row_id, row in enumerate(table_rows):
+                    row_dict[row_id] = []
+                for mentions in grounding_info:
+                    row_dict[mentions['row']].append(mentions)
                 for row_id, mentions in row_dict.items():
-                    row_passage_id_list = []
+                    # if node_id == 576039 and row_id == 6:
+                    row_passage_chunk_id_list = []
                     row_passage_score_list = []
                     row_linked_passage_context = []
                     for mention in mentions:
                         linked_passage_context = []
-                        mention_id = mention['mention_id']
-                        try:
-                            mention_linked_entity = node['linked_entities'][mention_id]['linked_entity']
-                            mention_linked_entity_scores = node['linked_entities'][mention_id]['scores']
-                        except:
-                            print(node_id, mention_id, len(node['linked_entities']))
-                            continue
-                        for id, linked_passage_id in enumerate(mention_linked_entity[:cfg.top_k_passages]):
-                            if linked_passage_id not in row_passage_id_list:
-                                row_passage_id_list.append(linked_passage_id)
+                        mention_linked_entity = mention['retrieved']
+                        mention_linked_entity_scores = mention['scores']
+                        for id, linked_passage_chunk_id in enumerate(mention_linked_entity[:cfg.top_k_passages]):
+                            # exculde duplicate passages
+                            if linked_passage_chunk_id not in row_passage_chunk_id_list:
+                                row_passage_chunk_id_list.append(linked_passage_chunk_id)
                                 row_passage_score_list.append(mention_linked_entity_scores[id])
                             else:
                                 continue
-                            raw_passage = all_passages[linked_passage_id]
+                            raw_passage = all_passages[linked_passage_chunk_id]
                             linked_passage_context.append(f"{raw_passage['title']} [SEP] {raw_passage['text']}")
-                        row_linked_passage_context.append(' [SEP] '.join(linked_passage_context))
-
-                    row_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(row_linked_passage_context)}"
+                        if len(linked_passage_context)!=0:
+                            row_linked_passage_context.append(' [SEP] '.join(linked_passage_context))
+                    if len(row_passage_chunk_id_list) == 0:
+                        row_node_context = f"{column_names} [SEP] {table_rows[row_id]}"
+                    else:
+                        row_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(row_linked_passage_context)}"
                     node_list.append({
                         'chunk_id': f'{node_id}_{row_id}',
                         'title': table_title,
                         'text': row_node_context,
                         'table_id': node_id,
-                        'passage_id_list': row_passage_id_list,
+                        'passage_chunk_id_list': row_passage_chunk_id_list,
                         'passage_score_list': row_passage_score_list,
                         'mention_by_mention': row_linked_passage_context
                     })
-
         elif hierarchical_level == 'edge':
-            for node in tqdm(graph, total=len(graph)):
-                node_id = node['node_id']
-                mention_info = table_mentions[node_id]
-                raw_table = all_tables[node_id]
+            for node_id, raw_table in tqdm(enumerate(all_tables), total=len(all_tables)):
+                table_chunk_id = node_id_to_chunk_id[node_id]
                 table_title = raw_table['title']
                 column_names, *table_rows = raw_table['text'].split('\n')
-                grounding_info = mention_info['grounding']
+                try:
+                    node = graph[table_chunk_id]
+                except:
+                    for row_id, table_row in enumerate(table_rows):
+                        row_node_context = f"{column_names} [SEP] {table_row}"
+                        node_list.append({
+                        'chunk_id': f'{node_id}_{row_id}',
+                        'title': table_title,
+                        'text': row_node_context,
+                        'table_id': node_id,
+                        'passage_chunk_id_list': [],
+                        'passage_score_list': [],
+                        'mention_by_mention': []
+                        })
+                    continue
+                grounding_info = node['results']
                 row_dict = {}
-                row_mention_dict = {}
-                for mention in grounding_info:
-                    row_dict.setdefault(mention['row_id'], []).append(mention)
-                    row_mention_dict.setdefault(mention['row_id'], []).append(mention['mention_id'])
-                row_mention_dict_list.append(row_mention_dict)
+                for row_id, row in enumerate(table_rows):
+                    row_dict[row_id] = []
+                for mentions in grounding_info:
+                    row_dict[mentions['row']].append(mentions)
                 for row_id, mentions in row_dict.items():
                     for mention in mentions:
                         linked_passage_context = []
-                        mention_id = mention['mention_id']
-                        try:
-                            mention_linked_entity = node['linked_entities'][mention_id]['linked_entity']
-                        except:
-                            print(node_id, mention_id, len(node['linked_entities']))
-                            continue
-                        for linked_passage_id in mention_linked_entity[:cfg.top_k_passages]:
-                            raw_passage = all_passages[linked_passage_id]
+                        mention_linked_entity = mention['retrieved']
+                        original_cell = mention["original_cell"].replace(' ', '_')
+                        for linked_passage_chunk_id in mention_linked_entity[:cfg.top_k_passages]:
+                            raw_passage = all_passages[linked_passage_chunk_id]
                             linked_passage_context.append(f"{raw_passage['title']} [SEP] {raw_passage['text']}")
-
-                        mention_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(linked_passage_context)}"
+                        if len(linked_passage_context) == 0:
+                            mention_node_context = f"{column_names} [SEP] {table_rows[row_id]}"
+                        else:
+                            mention_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(linked_passage_context)}"
                         node_list.append({
-                            'chunk_id': f'{node_id}_{row_id}_{mention_id}',
+                            'chunk_id': f'{node_id}_{row_id}__{original_cell}',
                             'title': table_title,
                             'text': mention_node_context,
                             'table_id': node_id,
-                            'passage_id_list': node['linked_entities'][mention_id]['linked_entity'][:cfg.top_k_passages],
+                            'passage_chunk_id_list': mention_linked_entity[:cfg.top_k_passages],
                             'mention_top_k': linked_passage_context
+                        })
+                    if len(mentions) == 0:
+                        row_node_context = f"{column_names} [SEP] {table_rows[row_id]}"
+                        node_list.append({
+                            'chunk_id': f'{node_id}_{row_id}',
+                            'title': table_title,
+                            'text': row_node_context,
+                            'table_id': node_id,
+                            'passage_chunk_id_list': [],
+                            'mention_top_k': []
                         })
 
         with open(cfg.preprocessed_graph_path.replace('.json', f'_{hierarchical_level}.json'), 'w') as fout:
@@ -225,9 +196,6 @@ def preprocess_graph(cfg, mongodb):
         
         preprocess_graph_collection = mongodb[preprocess_graph_collection_name]
         preprocess_graph_collection.insert_many(node_list)
-        
-        with open(cfg.preprocessed_graph_path.replace('.json', f'_{hierarchical_level}_mention.json'), 'w') as fout:
-            json.dump(row_mention_dict_list, fout, indent=4)
 
     else:
         preprocess_graph_collection = mongodb[preprocess_graph_collection_name]
@@ -240,16 +208,7 @@ def preprocess_graph(cfg, mongodb):
 
     return node_list
 
-@hydra.main(config_path="conf", config_name="subgraph_embedder")
-def main(cfg: DictConfig):
-    # Set MongoDB
-    client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
-    mongodb = client[cfg.dbname]
-    
-    # preprocess graph
-    node_list = preprocess_graph(cfg, mongodb)
-
-    # load model
+def setup_encoder(cfg):
     cfg = setup_cfg_gpu(cfg)
     saved_state = load_states_from_checkpoint(cfg.model_file)
     set_cfg_params_from_state(saved_state.encoder_params, cfg)
@@ -296,6 +255,16 @@ def main(cfg: DictConfig):
         if 'encoder.embeddings.position_ids' in model_to_load.state_dict():
             ctx_state['encoder.embeddings.position_ids'] = model_to_load.state_dict()['encoder.embeddings.position_ids']
     model_to_load.load_state_dict(ctx_state)
+    return encoder, tensorizer
+
+@hydra.main(config_path="conf", config_name="subgraph_embedder")
+def main(cfg: DictConfig):
+    # Set MongoDB
+    client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
+    mongodb = client[cfg.dbname]
+    
+    # preprocess graph
+    node_list = preprocess_graph(cfg, mongodb)
     
     all_nodes_dict = {}
     for chunk in node_list:
@@ -303,36 +272,16 @@ def main(cfg: DictConfig):
         all_nodes_dict[sample_id] = BiEncoderPassage(chunk['text'], chunk['title'])
     
     all_nodes = [(k, v) for k, v in all_nodes_dict.items()]
-    shard_size = math.ceil(len(all_nodes) / cfg.num_shards)
-    start_idx = cfg.shard_id * shard_size
-    end_idx = start_idx + shard_size
 
-    shard_nodes = all_nodes[start_idx:end_idx]
+    # load model
+    encoder, tensorizer = setup_encoder(cfg)
 
-    gpu_id = cfg.gpu_id
-    if gpu_id == -1:
-        gpu_nodes = shard_nodes
-    else:
-        per_gpu_size = math.ceil(len(shard_nodes) / cfg.num_gpus)
-        gpu_start = per_gpu_size * gpu_id
-        gpu_end = gpu_start + per_gpu_size
-        gpu_nodes = shard_nodes[gpu_start:gpu_end]
-
-    expert_id = None
-    if cfg.encoder.use_moe:
-        # TODO(chenghao): Fix this.
-        if cfg.target_expert != -1:
-            expert_id = int(cfg.target_expert)
-        else:
-            expert_id = 1
+    data = gen_ctx_vectors(cfg, all_nodes, encoder, tensorizer, True, expert_id = cfg.expert_id)
     
-    data = gen_ctx_vectors(cfg, gpu_nodes, encoder, tensorizer, True, expert_id=expert_id)
-    if gpu_id == -1:
-        file = cfg.out_file + "_" + str(cfg.shard_id)
-    else:
-        file = cfg.out_file + "_shard" + str(cfg.shard_id) + "_gpu" + str(gpu_id)
+    file = cfg.out_file
     pathlib.Path(os.path.dirname(file)).mkdir(parents=True, exist_ok=True)
     print('Writing results to %s', file)
+    
     with open(file, mode="wb") as f:
         pickle.dump(data, f)
     print('Total passages processed %d. Written to %s', len(data), file)

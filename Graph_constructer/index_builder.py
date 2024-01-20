@@ -12,30 +12,32 @@ import numpy as np
 from utils.model import RetrievalModel,TeacherModel,MVD
 
 class IndexBuilder:
-    def __init__(self, cfg, table_views_cursor, passage_views_cursor, device, n_gpu):
+    def __init__(self, cfg, views):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        n_gpu = torch.cuda.device_count()
         self.cfg = cfg
-        self.table_views = table_views_cursor
-        self.passage_views = passage_views_cursor
+        self.views = views
         embedder, _ = self.load_embedder(cfg)
         embedder.to(device)
         if n_gpu > 1:
             embedder = torch.nn.DataParallel(embedder)
         self.embedder = embedder
 
-    def build(self,):
-        entity_embedding, entity_embedding2id, data_type_idx, view2entity = self.get_entity_embedding()
-        # Begin entity_embedding reorder
+    def build(self, dest_type):
+        entity_embedding, entity_embedding2id, data_type_idx, view2entity = self.get_entity_embedding(dest_type)
         new_entity_embedding = entity_embedding.copy()
+        
         for i in range(entity_embedding.shape[0]):
             new_entity_embedding[entity_embedding2id[i]] = entity_embedding[i]
+
         del entity_embedding,entity_embedding2id
         gc.collect()
         entity_embedding = new_entity_embedding
         dim = entity_embedding.shape[1]
-        # Build ANN Index
         indicies={}
-        for data_type in ['passage']:
-            if data_type == 'whole':
+
+        for data_type in [dest_type]:
+            if data_type == 'both':
                 new_embedding = entity_embedding
             else:
                 new_embedding = entity_embedding[data_type_idx[data_type][0]:data_type_idx[data_type][1]]
@@ -50,9 +52,10 @@ class IndexBuilder:
                 index = faiss.IndexFlatIP(dim)
             indicies[data_type] = index
             indicies[data_type].add(new_embedding.astype('float32'))
+
         return indicies, view2entity
     
-    def get_entity_embedding(self,):
+    def get_entity_embedding(self, dest_type):
         entity_embedding_path = self.cfg.entity_embedding_path
         os.makedirs(os.path.dirname(entity_embedding_path), exist_ok=True)
         entity_embedding_idx_path = self.cfg.entity_embedding_idx_path
@@ -62,7 +65,7 @@ class IndexBuilder:
         view2entity_path = self.cfg.view2entity_path
         os.makedirs(os.path.dirname(view2entity_path), exist_ok=True)
 
-        entity_idxs, entity_embeds, data_type_idx, view2entity = self.embed_entities(entity_embedding_path, entity_embedding_idx_path, data_type_idx_path, view2entity_path)
+        entity_idxs, entity_embeds, data_type_idx, view2entity = self.embed_entities(dest_type, entity_embedding_path, entity_embedding_idx_path, data_type_idx_path, view2entity_path)
 
         if not os.path.exists(entity_embedding_path):
             with open(entity_embedding_path, 'wb') as handle:
@@ -82,20 +85,20 @@ class IndexBuilder:
 
         return entity_embeds, entity_idxs, data_type_idx, view2entity
         
-    def embed_entities(self, entity_embedding_path, entity_embedding_idx_path, data_type_idx_path, view2entity_path):
+    def embed_entities(self, dest_type, entity_embedding_path, entity_embedding_idx_path, data_type_idx_path, view2entity_path):
+        dest_types = ['table', 'passage'] if dest_type == 'both' else [dest_type]
+        
         if not (os.path.exists(data_type_idx_path) and os.path.exists(view2entity_path)):
             local_views = dict()
             global_views = dict()
-            local_views['table'] = list()
-            global_views['table'] = list()
-            local_views['passage'] = list()
-            global_views['passage'] = list()
-            for view in self.table_views:
-                local_views['table'].append(view['local_ids'])
-                global_views['table'].append(view['global_ids'])
-            for view in self.passage_views:
-                local_views['passage'].append(view['local_ids'])
-                global_views['passage'].append(view['global_ids'])
+            
+            for data_type in dest_types:
+                local_views[data_type] = list()
+                global_views[data_type] = list()
+                
+                for view in self.table_views:
+                    local_views[data_type].append(view['local_ids'])
+                    global_views[data_type].append(view['global_ids'])
 
             data_type_idx = dict()
             view2entity = dict()
@@ -103,25 +106,30 @@ class IndexBuilder:
             global_view_embeds = list()
             
             num = 0
-            for data_type in ['table', 'passage']:
+            
+            for data_type in dest_types:
                 view2entity[data_type] = dict()
                 view_idx= 0
                 entity_idx = 0
                 start_idx = num
+                
                 for local_ids,global_ids in zip(local_views[data_type], global_views[data_type]):
                     entity_ids = [global_ids] + local_ids
                     view_num = len(entity_ids)
+                    
                     for i in range(view_num):
+                        
                         if i == 0:
                             global_view_embeds.append((entity_ids[i],num))
                         else:
                             local_view_embeds.append((entity_ids[i],num))
                         
                         view2entity[data_type][view_idx] = entity_idx
-
                         num += 1
                         view_idx += 1
+                        
                     entity_idx += 1
+                    
                 end_idx = num
                 data_type_idx[data_type] = [start_idx, end_idx]
         else:
@@ -147,6 +155,7 @@ class IndexBuilder:
                     dataloader_list.append(local_view_dataloader)
                 
                 for infer_dataloader in dataloader_list:
+                    
                     for batch in tqdm(infer_dataloader):
                         entity_ids,entity_idx = batch
                         entity_ids = entity_ids.cuda()

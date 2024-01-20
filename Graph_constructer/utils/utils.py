@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 import torch
+from tqdm import tqdm
 from typing import List,Optional, Union, Optional
 import json
 
@@ -103,26 +104,16 @@ def process_mention(tokenizer, mention_dict, max_seq_length):
     mention_ids += mention_padding
     return mention_ids,mention_tokens
 
-def prepare_datasource(cfg, mongodb, datasource='table'):
+def prepare_datasource(cfg, mongodb, source_type = 'table'):
     collection_list = mongodb.list_collection_names()
-    if datasource == 'table':
-        if cfg.ctx_src_table in collection_list:
-            all_tables_collection = mongodb[cfg.ctx_src_table]
-            all_tables = all_tables_collection.find()
-        else:
-            all_tables_path = cfg.ctx_sources[cfg.ctx_src_table]['file']
-            all_tables = json.load(open(all_tables_path, 'r'))
-            all_tables_collection = mongodb[cfg.ctx_src_table]
-            all_tables_collection.insert_many(all_tables)
-        return all_tables
-
-    if datasource == 'passage':
-        if cfg.ctx_src_passage in collection_list:
-            all_passages_collection = mongodb[cfg.ctx_src_passage]
-            all_passages = all_passages_collection.find()
-        else:
-            all_passages_path = cfg.ctx_sources[cfg.ctx_src_passage]['file']
-            all_passages = json.load(open(all_passages_path, 'r'))
-            all_passages_collection = mongodb[cfg.ctx_src_passage]
-            all_passages_collection.insert_many(all_passages)
-        return all_passages
+    collection_name = cfg.data_sources[source_type]['collection_name']
+    
+    if collection_name in collection_list:
+        collection = mongodb[collection_name]
+        total_num = collection.count_documents({})
+        return [doc for doc in tqdm(collection.find(), total = total_num)]
+    else:
+        data = json.load(open(cfg.data_sources[source_type]['path'], 'r'))
+        collection = mongodb[collection_name]
+        collection.insert_many(data)
+        return data
