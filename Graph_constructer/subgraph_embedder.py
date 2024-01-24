@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
-
+import itertools
 from DPR.generate_dense_embeddings import gen_ctx_vectors
 
 from dpr.data.biencoder_data import BiEncoderPassage
@@ -190,7 +190,98 @@ def preprocess_graph(cfg, mongodb):
                             'passage_chunk_id_list': [],
                             'mention_top_k': []
                         })
-
+        elif hierarchical_level == 'middle':
+            max_num_edges = cfg.max_num_edges
+            for node_id, raw_table in tqdm(enumerate(all_tables), total=len(all_tables)):
+                table_chunk_id = node_id_to_chunk_id[node_id]
+                table_title = raw_table['title']
+                column_names, *table_rows = raw_table['text'].split('\n')
+                try:
+                    node = graph[table_chunk_id]
+                except:
+                    for row_id, table_row in enumerate(table_rows):
+                        row_node_context = f"{column_names} [SEP] {table_row}"
+                        node_list.append({
+                        'chunk_id': f'{node_id}_{row_id}',
+                        'title': table_title,
+                        'text': row_node_context,
+                        'table_id': node_id,
+                        'passage_chunk_id_list': [],
+                        'passage_score_list': [],
+                        'mention_by_mention': []
+                        })
+                    continue
+                grounding_info = node['results']
+                row_dict = {}
+                for row_id, row in enumerate(table_rows):
+                    row_dict[row_id] = []
+                for mentions in grounding_info:
+                    row_dict[mentions['row']].append(mentions)
+                for row_id, mentions in row_dict.items():
+                    # if node_id == 576039 and row_id == 6:
+                    row_passage_chunk_id_list = []
+                    row_passage_score_list = []
+                    row_linked_passage_context = []
+                    row_linked_passage_chunk_id = []
+                    for mention in mentions:
+                        linked_passage_context = []
+                        linked_passage_chunk_id_list = []
+                        mention_linked_entity = mention['retrieved']
+                        mention_linked_entity_scores = mention['scores']
+                        for id, linked_passage_chunk_id in enumerate(mention_linked_entity[:cfg.top_k_passages]):
+                            # exculde duplicate passages
+                            if linked_passage_chunk_id not in row_passage_chunk_id_list:
+                                row_passage_chunk_id_list.append(linked_passage_chunk_id)
+                                row_passage_score_list.append(mention_linked_entity_scores[id])
+                            else:
+                                continue
+                            raw_passage = all_passages[linked_passage_chunk_id]
+                            linked_passage_chunk_id_list.append(linked_passage_chunk_id)
+                            linked_passage_context.append(f"{raw_passage['title']} [SEP] {raw_passage['text']}")
+                        if len(linked_passage_context)!=0:
+                            row_linked_passage_context.append(' [SEP] '.join(linked_passage_context))
+                            row_linked_passage_chunk_id.append(linked_passage_chunk_id_list)
+                    if len(row_passage_chunk_id_list) == 0:
+                        row_node_context = f"{column_names} [SEP] {table_rows[row_id]}"
+                        node_list.append({
+                            'chunk_id': f'{node_id}_{row_id}',
+                            'title': table_title,
+                            'text': row_node_context,
+                            'table_id': node_id,
+                            'passage_chunk_id_list': row_passage_chunk_id_list,
+                            'passage_score_list': row_passage_score_list,
+                            'mention_by_mention': row_linked_passage_context
+                        })
+                    else:
+                        if len(row_linked_passage_context) >= max_num_edges:
+                            combinations = list(itertools.combinations(list(range(len(row_linked_passage_context))), max_num_edges))
+                            for combination in combinations:
+                                row_linked_passage_context_combination = [row_linked_passage_context[i] for i in combination]
+                                row_linked_passage_chunk_id_combination = [row_linked_passage_chunk_id[i][0] for i in combination]
+                                row_passage_score_list_combination = [row_passage_score_list[i] for i in combination]
+                                combination_id = '__'.join(row_linked_passage_chunk_id_combination).replace(' ', '_')
+                                row_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(list(row_linked_passage_context_combination))}"
+                                node_list.append({
+                                    'chunk_id': f'{node_id}_{row_id}__{combination_id}',
+                                    'title': table_title,
+                                    'text': row_node_context,
+                                    'table_id': node_id,
+                                    'passage_chunk_id_list': row_linked_passage_chunk_id_combination,
+                                    'passage_score_list': row_passage_score_list_combination,
+                                    'mention_by_mention': row_linked_passage_context_combination
+                                })
+                        else:
+                            row_node_context = f"{column_names} [SEP] {table_rows[row_id]} [SEP] {' [SEP] '.join(row_linked_passage_context)}"
+                            node_list.append({
+                                'chunk_id': f'{node_id}_{row_id}',
+                                'title': table_title,
+                                'text': row_node_context,
+                                'table_id': node_id,
+                                'passage_chunk_id_list': row_passage_chunk_id_list,
+                                'passage_score_list': row_passage_score_list,
+                                'mention_by_mention': row_linked_passage_context
+                            })
+                        
         with open(cfg.preprocessed_graph_path.replace('.json', f'_{hierarchical_level}.json'), 'w') as fout:
             json.dump(node_list, fout, indent=4)
         
@@ -278,7 +369,9 @@ def main(cfg: DictConfig):
 
     data = gen_ctx_vectors(cfg, all_nodes, encoder, tensorizer, True, expert_id = cfg.expert_id)
     
-    file = cfg.out_file
+    file = cfg.out_file + f'_{cfg.hierarchical_level}'
+    if cfg.hierarchical_level =='middle':
+        file += f'_{cfg.max_num_edges}'
     pathlib.Path(os.path.dirname(file)).mkdir(parents=True, exist_ok=True)
     print('Writing results to %s', file)
     

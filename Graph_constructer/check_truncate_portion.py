@@ -52,8 +52,8 @@ def main(cfg: DictConfig):
         else:
             portion_list.append(0)
         length_list.append(int(a.shape[0]))
-    json.dump(length_list, open(f'/mnt/sdd/shpark/portion/length_list_{cfg.hierarchical_level}', 'w'), indent=4)
-    json.dump(portion_list, open(f'/mnt/sdd/shpark/portion/portion_list_{cfg.hierarchical_level}', 'w'), indent=4)
+    json.dump(length_list, open(f'/mnt/sdd/shpark/portion/length_list_{cfg.hierarchical_level}.json', 'w'), indent=4)
+    json.dump(portion_list, open(f'/mnt/sdd/shpark/portion/portion_list_{cfg.hierarchical_level}.json', 'w'), indent=4)
     print(f"max length: {max(length_list)}")
     print(f"min length: {min(length_list)}")
     print(f"mean length: {sum(length_list) / len(length_list)}")

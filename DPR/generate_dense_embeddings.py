@@ -33,7 +33,7 @@ from dpr.utils.model_utils import (
     load_states_from_checkpoint,
     move_to_device,
 )
-from run_chain_of_skills_hotpot import set_up_encoder
+from DPR.run_chain_of_skills_hotpot import set_up_encoder
 logger = logging.getLogger()
 setup_logger(logger)
 

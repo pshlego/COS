@@ -21,7 +21,7 @@ from dpr.utils.model_utils import (
 )
 from dpr.utils.tokenizers import SimpleTokenizer
 from dpr.data.qa_validation import has_answer
-
+import time
 from DPR.run_chain_of_skills_hotpot import generate_question_vectors
 
 logger = logging.getLogger()
@@ -146,6 +146,7 @@ def main(cfg: DictConfig):
         print(f"Loading {total_graphs} graphs...")
         
         for doc in tqdm(graph_collection.find(), total=total_graphs):
+            doc['table_name'] = all_tables[doc['table_id']]['chunk_id']
             graphs[doc['chunk_id']] = doc
 
     print("finish loading graphs")
@@ -175,7 +176,9 @@ def main(cfg: DictConfig):
     b_size = 1
     tokenizer = SimpleTokenizer()
     new_data = []
+    time_list = []
     for i in tqdm(range(0, len(questions_tensor), b_size)):
+        time1 = time.time()
         D, I = gpu_index_flat.search(questions_tensor[i:i+b_size].cpu().numpy(), k)
         original_sample = data[i]
         all_included = []
@@ -185,6 +188,7 @@ def main(cfg: DictConfig):
                 subgraph = graphs[doc_ids[id]]
                 table = all_tables[subgraph['table_id']]
                 table_title = table['title']
+                table_name = subgraph['table_name']
                 full_text = table['text']
                 rows = table['text'].split('\n')[1:]
                 header = table['text'].split('\n')[0]
@@ -195,7 +199,7 @@ def main(cfg: DictConfig):
                     pasg_has_answer = False
                 if len(all_included) == k:
                     break
-                all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m])})
+                all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m]), 'table_name': table_name})
                 # star case
                 if 'passage_score_list' in subgraph:
                     passage_id_list = sort_page_ids_by_scores(subgraph['passage_chunk_id_list'], subgraph['passage_score_list'])
@@ -213,22 +217,24 @@ def main(cfg: DictConfig):
                         pasg_has_answer = False
                     if len(all_included) == k:
                         break
-                    all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m])})
-        
+                    all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m]), 'table_name': table_name})
         original_sample['ctxs'] = all_included
-        
+        time2 = time.time()
+        time_list.append(time2-time1)
         for l, limit in enumerate(limits):
             
             if any([ctx['has_answer'] for ctx in all_included[:limit]]):
                 answer_recall[l] += 1
 
         new_data.append(original_sample)
-
     for l, limit in enumerate(limits):
         print ('answer recall', limit, answer_recall[l]/len(data))
-
-    with open(cfg.result_path, 'w') as f:
+    print ('average time', np.mean(time_list))
+    result_path = cfg.result_path.split('.')[0] + '_' + cfg.hierarchical_level + '.json'
+    with open(result_path, 'w') as f:
         json.dump(new_data, f, indent=4)
-
+    time_path = cfg.result_path.split('.')[0] + '_' + cfg.hierarchical_level + '_time.json'
+    with open(time_path, 'w') as f:
+        json.dump(time_list, f, indent=4)
 if __name__ == "__main__":
     main()
