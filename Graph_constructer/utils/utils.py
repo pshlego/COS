@@ -15,7 +15,12 @@ class MentionInfo(object):
             node_id:Optional[int]=None,
             row_id:Optional[int]=None,
             mention_id:Optional[int]=None,
+            original_cell:Optional[str]=None,
+            chunk_id: Optional[str]=None,
+            question: Optional[str]=None
             ):
+        self.chunk_id = chunk_id
+        self.original_cell = original_cell
         self.datum_mention = datum_mention
         self.node_id = node_id
         self.row_id = row_id
@@ -23,6 +28,7 @@ class MentionInfo(object):
         self.mention_tokens = mention_tokens
         self.data_type = data_type
         self.mention_id = mention_id
+        self.question = question
 
 class EntityDataset(Dataset):
     

@@ -14,7 +14,7 @@ passage:
   question_embedding_path: /mnt/sdd/shpark/cos/embeds/ott_passage_question_0
 
 # top k entities to retrieve
-k: 2
+k: 5
 
 # A trained bi-encoder checkpoint file to initialize the model
 model_file: /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt

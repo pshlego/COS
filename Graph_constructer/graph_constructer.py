@@ -17,13 +17,13 @@ from pymongo import MongoClient
 
 @hydra.main(config_path="conf", config_name="graph_construction")
 def main(cfg: DictConfig):
-    # Set MongoDB
+    # set mongoDB
     client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
     mongodb = client[cfg.dbname]
 
     data_sources = {}
     
-    # Mention Detection    
+    # mention detecting  
     if cfg.do_mention_detection:
         mentions = {}
         mention_detector_cfg = hydra.compose(config_name='mention_detector')
@@ -44,7 +44,7 @@ def main(cfg: DictConfig):
                 total_num = collection.count_documents({})
                 mentions[source_type] = [doc for doc in tqdm(collection.find(), total = total_num)]
 
-    # Entity Linking
+    # entity linking
     if cfg.do_entity_linking:
         linking_type = cfg.entity_linking['linking_type']
         if linking_type == 'cos':
@@ -71,34 +71,34 @@ def main(cfg: DictConfig):
             dest_types = ['table', 'passage'] if cfg.entity_linking['dest_type'] == 'both' else [cfg.entity_linking['dest_type']]
             
             # view generating
-            view_generator_cfg = entity_linking_cfg.view_generator
-            view_generator = ViewGenerator(view_generator_cfg, mongodb)
-            views = {}
-            for dest_type in dest_types:
-                view_path = view_generator_cfg[dest_type]['view_path']
-                
-                if not os.path.exists(view_path):
-                    os.makedirs(os.path.dirname(view_path), exist_ok=True)
+            if entity_linking_cfg.do_view_generation:
+                view_generator_cfg = entity_linking_cfg.view_generator
+                view_generator = ViewGenerator(view_generator_cfg, mongodb)
+                views = {}
+                for dest_type in dest_types:
+                    view_path = view_generator_cfg[dest_type]['view_path']
                     
-                    if dest_type in data_sources:
-                        data = data_sources[dest_type]
+                    if not os.path.exists(view_path):
+                        os.makedirs(os.path.dirname(view_path), exist_ok=True)
+                        
+                        if dest_type in data_sources:
+                            data = data_sources[dest_type]
+                        else:
+                            data = prepare_datasource(cfg, mongodb, dest_type)
+                            data_sources[dest_type] = data
+                        
+                        views[dest_type] = view_generator.generate(data, dest_type)
                     else:
-                        data = prepare_datasource(cfg, mongodb, dest_type)
-                        data_sources[dest_type] = data
-                    
-                    views[dest_type] = view_generator.generate(data, dest_type)
-                else:
-                    collection_name = os.path.basename(view_path).split('.')[0]
-                    collection = mongodb[collection_name]
-                    total_num = collection.count_documents({})
-                    views[dest_type] = [doc for doc in tqdm(collection.find(), total = total_num)]
+                        views[dest_type] = json.load(open(view_path, 'r'))
+            else:
+                views = None
             
             # index building
             index_builder_cfg = entity_linking_cfg.index_builder
             index_builder = IndexBuilder(index_builder_cfg, views)
             indicies, view2entity = index_builder.build(cfg.entity_linking['dest_type'])
             
-            
+            print('index building finished')
             entity_linker = MVDEntityLinker(entity_linking_cfg, indicies[cfg.entity_linking['dest_type']], view2entity[cfg.entity_linking['dest_type']], index_builder.embedder)
             for source_type in source_types:
                 

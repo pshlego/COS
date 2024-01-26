@@ -30,7 +30,7 @@ index_builder:
 
 # Run on gpus
 no_cuda: False
-batch_size: 4096
+batch_size: 512
 top_k: 5
 threshold: 0.95
 max_seq_length: 128
@@ -45,3 +45,4 @@ username: root
 password: 1234
 port: 27017
 
+do_view_generation: False

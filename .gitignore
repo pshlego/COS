@@ -28,8 +28,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 ColBERT/
-error_analysis/
+error_analysis/results/
 plot/
+experiments/
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.

@@ -96,7 +96,7 @@ class IndexBuilder:
                 local_views[data_type] = list()
                 global_views[data_type] = list()
                 
-                for view in self.table_views:
+                for view in self.views[data_type]:
                     local_views[data_type].append(view['local_ids'])
                     global_views[data_type].append(view['global_ids'])
 

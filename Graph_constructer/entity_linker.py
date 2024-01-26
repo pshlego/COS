@@ -201,24 +201,16 @@ class MVDEntityLinker:
 
     def link(self, source_type, detected_mentions):
         mention_queries = self.prepate_mention_queries(source_type, detected_mentions)
-
-        all_mention_ids = torch.tensor(
-            [f.mention_ids for f in mention_queries], dtype=torch.long)
-        all_node_ids = torch.tensor(
-            [f.node_id for f in mention_queries], dtype=torch.long)
         
-        query_data = TensorDataset(all_mention_ids,all_node_ids)
-        query_sampler = SequentialSampler(query_data)
-        dataloader = DataLoader(query_data, sampler=query_sampler, batch_size=self.cfg.batch_size)
-        
-        results = self.entity_linking(dataloader)
+        results = self.entity_linking(mention_queries)
         
         result_path = self.cfg.result_path
         
-        json.dump(results, open(result_path, 'w'), indent=4)
         collection_name = os.path.basename(result_path).split('.')[0]
         collection = self.mongodb[collection_name]
         collection.insert_many(results)
+        
+        json.dump(results, open(result_path, 'w'), indent=4)
 
     def prepate_mention_queries(self, source_type, detected_mentions):
         if source_type == 'table':
@@ -250,49 +242,57 @@ class MVDEntityLinker:
                 mention_queries = mention_queries_1 + mention_queries_2
         return mention_queries
     
-    def entity_linking(self, dataloader):
-        entity_linking_result  = []
-        mention_embeds, node_ids, cand_entities_list = list(),list(),list()
+    def entity_linking(self, mention_queries):
+        batch_size = self.cfg.batch_size
+        entity_linking_result = []
         node_map = {}
-        for mention_ids, node_id in tqdm(dataloader):
-            mention_ids = mention_ids.to(self.device)
+        for batch_start in tqdm(range(0, len(mention_queries), batch_size), desc="Processing batches"):
+            batch_end = min(batch_start + batch_size, len(mention_queries))
+            mention_queries_batch = mention_queries[batch_start:batch_end]
+
+            mention_ids_batch = torch.tensor([mq.mention_ids for mq in mention_queries_batch], dtype=torch.long).to(self.device)
+
             with torch.no_grad():
-                mention_embed = self.mention_embedder(mention_ids=mention_ids)
-                mention_embed = mention_embed.detach().cpu().numpy().astype('float32')
-                mention_embeds.append(mention_embed)
-                top_k = self.cfg.top_k * 30 + 1
-                scores, closest_entities = self.index.search(mention_embed, top_k)
-                cand_entities, score_list = self.get_distinct_entities(closest_entities, scores, 'topk')
-                cand_entities_list.extend(cand_entities)
-                node_ids.extend(node_id.tolist())
-                for n_id, link_id, score in zip(node_id.tolist(), cand_entities, score_list):
-                    if n_id in node_map:
-                        node_map[n_id]['retrieved'].append(link_id)
-                        node_map[n_id]['scores'].append(score)
+                mention_embed_batch = self.mention_embedder(mention_ids=mention_ids_batch)
+                mention_embed_batch = mention_embed_batch.detach().cpu().numpy().astype('float32')
+                top_k = self.cfg.top_k * 30
+                scores_batch, closest_entities_batch = self.index.search(mention_embed_batch, top_k)
+
+                for i, mention_query in enumerate(mention_queries_batch):
+                    cand_entities, score_list = self.get_distinct_entities([closest_entities_batch[i]], [scores_batch[i]], 'topk')
+                    chunk_id = mention_query.chunk_id
+                    if chunk_id in node_map:
+                        scores = [float(x) for x in score_list[0]]
+                        retrieved = cand_entities[0]
+                        node_map[chunk_id]['results'].append({'original_cell':mention_query.original_cell,'retrieved':retrieved, 'scores':scores, 'row':mention_query.row_id})
                     else:
-                        node_map[n_id] = {'retrieved':[link_id], 'scores':[score]}
-        entity_linking_result = [{'node_id': n_id, 'results': list(links)} for n_id, links in tqdm(node_map.items())]
+                        scores = [float(x) for x in score_list[0]]
+                        retrieved = cand_entities[0]
+                        node_map[chunk_id] = {'question': mention_query.question, 'results': [{'original_cell':mention_query.original_cell,'retrieved':retrieved, 'scores':scores, 'row':mention_query.row_id}]}
+
+        entity_linking_result = [{'table_chunk_id': chunk_id, 'question': links['question'], 'results': links['results']} for chunk_id, links in tqdm(node_map.items(), desc="Processing")]
         return entity_linking_result
+
 
     def get_distinct_entities(self, closest_entities, scores, type):
         mention_num = len(closest_entities)
         pred_entity_idxs = list()
         score_list = list()
         for i in range(mention_num):
-            pred_entity_idx = [eidx for eidx in closest_entities[i][1:]]
+            pred_entity_idx = [eidx for eidx in closest_entities[i]]
             if self.view2entity is not None:
-                pred_entity_idx = [self.view2entity[str(eidx)] for eidx in closest_entities[i][1:]]
+                pred_entity_idx = [self.view2entity[str(eidx)] for eidx in closest_entities[i]]
             new_pred_entity_idx = list()
             new_scores = list()
             for j, item in enumerate(pred_entity_idx):
                 if type == 'topk':
                     if item not in new_pred_entity_idx and len(new_pred_entity_idx) < self.cfg.top_k:
                         new_pred_entity_idx.append(item)
-                        new_scores.append(scores[i][j+1])
+                        new_scores.append(scores[i][j])
                 else:
                     if item not in new_pred_entity_idx:
                         new_pred_entity_idx.append(item)
-                        new_scores.append(scores[i][j+1])
+                        new_scores.append(scores[i][j])
             pred_entity_idxs.append(new_pred_entity_idx)
             score_list.append(new_scores)
         return pred_entity_idxs, score_list
@@ -307,7 +307,9 @@ class MVDEntityLinker:
             for id, mention_dict in enumerate(mentions):
                 mention_ids, mention_tokens = process_mention(self.tokenizer, mention_dict, self.cfg.max_seq_length)
                 mention_queries.append(MentionInfo(
-                                datum_mention=mention_tokens,
+                                chunk_id=datum_mention['chunk_id'],
+                                original_cell=mention_dict['mention'],
+                                question=datum_mention['title'] + ' [SEP] ' + datum_mention['text'],
                                 node_id=mention_dict['node_id'],
                                 row_id= mention_dict['row_id'] if source_type == 'table' else None,
                                 mention_ids=mention_ids,

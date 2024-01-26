@@ -23,7 +23,7 @@ do_entity_linking: True
 
 # Run on gpus
 no_cuda: False
-batch_size: 4096
+batch_size: 1024
 top_k: 5
 threshold: 0.95
 max_seq_length: 128
