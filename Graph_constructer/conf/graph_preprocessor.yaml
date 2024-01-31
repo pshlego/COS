@@ -1,0 +1,19 @@
+# Input path
+graph_path: /mnt/sdc/shpark/graph/entity_linking_results/table_chunks_to_passages_cos_table_passage.json
+graph_collection_name: table_chunks_to_passages_cos_table_passage
+table_mention_collection_name: all_table_chunks_span_prediction
+table_collection_name: ott_table
+passage_collection_name: ott_wiki_passages
+
+# Output path
+preprocessed_graph_path: /mnt/sdd/shpark/graph/preprocess/preprocess_table_graph_cos_apply_topk.json
+
+# Hierarchical level
+hierarchical_level: edge # edge, star
+top_k_passages: 5
+
+# MongoDB
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017

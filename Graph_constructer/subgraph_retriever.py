@@ -1,19 +1,15 @@
 import hydra
 import logging
-import glob
 import json
 import pickle
 import faiss
-import torch
-from pymongo import MongoClient
+import time
 import numpy as np
+from pymongo import MongoClient
 from tqdm import tqdm
-from typing import List
-from torch import Tensor as T
 from omegaconf import DictConfig, OmegaConf
 from dpr.models import init_biencoder_components
 from dpr.options import setup_logger, setup_cfg_gpu, set_cfg_params_from_state
-from dpr.utils.data_utils import Tensorizer
 from dpr.utils.model_utils import (
     setup_for_distributed_mode,
     get_model_obj,
@@ -21,7 +17,6 @@ from dpr.utils.model_utils import (
 )
 from dpr.utils.tokenizers import SimpleTokenizer
 from dpr.data.qa_validation import has_answer
-import time
 from DPR.run_chain_of_skills_hotpot import generate_question_vectors
 
 logger = logging.getLogger()
@@ -108,6 +103,7 @@ def build_query(filename):
         if 'hard_negative_ctxs' in sample:
             del sample['hard_negative_ctxs']
     return data 
+
 def sort_page_ids_by_scores(page_ids, page_scores):
     # Combine page IDs and scores into a list of tuples
     combined_list = list(zip(page_ids, page_scores))
@@ -127,17 +123,8 @@ def main(cfg: DictConfig):
     mongodb = client[cfg.dbname]
     
     # load dataset
-    table_collection = mongodb[cfg.table_collection_name]
-    total_tables = table_collection.count_documents({})
-    print(f"Loading {total_tables} tables...")
-    all_tables = [doc for doc in tqdm(table_collection.find(), total=total_tables)]
-    print("finish loading tables")    
-
-    passage_collection = mongodb[cfg.passage_collection_name]
-    total_passages = passage_collection.count_documents({})
-    print(f"Loading {total_passages} passages...")
-    all_passages = {doc['chunk_id']:doc for doc in tqdm(passage_collection.find(), total=total_passages)}
-    print("finish loading passages")
+    all_tables = json.load(open(cfg.table_data_file_path))
+    all_passages = {doc['chunk_id']:doc for doc in json.load(open(cfg.passage_data_file_path))}
     graphs = {}
     
     for graph_collection_name in cfg.graph_collection_name_list:
@@ -177,64 +164,97 @@ def main(cfg: DictConfig):
     tokenizer = SimpleTokenizer()
     new_data = []
     time_list = []
-    for i in tqdm(range(0, len(questions_tensor), b_size)):
+    
+    for i in tqdm(range(0, len(data), b_size)):
         time1 = time.time()
-        D, I = gpu_index_flat.search(questions_tensor[i:i+b_size].cpu().numpy(), k)
+        questions_tensor = generate_question_vectors(encoder, tensorizer, [data[i]['question']], b_size, expert_id=expert_id, mean_pool=cfg.mean_pool, silence=True)[:1]
+        D, I = gpu_index_flat.search(questions_tensor.cpu().numpy(), 500)
         original_sample = data[i]
         all_included = []
-        full_text_set = set()
+        exist_table = {}
+        exist_passage = {}
+        
         for j, ind in enumerate(I):
             for m, id in enumerate(ind):
                 subgraph = graphs[doc_ids[id]]
-                table = all_tables[subgraph['table_id']]
+                table_id = subgraph['table_id']
+                table = all_tables[table_id]
                 table_title = table['title']
                 table_name = subgraph['table_name']
                 full_text = table['text']
                 rows = table['text'].split('\n')[1:]
                 header = table['text'].split('\n')[0]
+                doc_id = subgraph['chunk_id']
                 row_id = int(doc_ids[id].split('_')[1])
-                if 'answers' in original_sample:
-                    pasg_has_answer = has_answer(original_sample['answers'], full_text, tokenizer, 'string')
-                else:
-                    pasg_has_answer = False
-                if len(all_included) == k:
-                    break
-                all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m]), 'table_name': table_name})
+
                 # star case
                 if 'passage_score_list' in subgraph:
                     passage_id_list = sort_page_ids_by_scores(subgraph['passage_chunk_id_list'], subgraph['passage_score_list'])
+                    level = 'star'
                 else:
                     passage_id_list = subgraph['passage_chunk_id_list']
-                for passage_id in passage_id_list:
-                    passage = all_passages[passage_id]
-                    full_text = header + '\n' + rows[row_id] + '\n' + passage['title'] + ' ' + passage['text']
-                    if full_text in full_text_set:
-                        continue
-                    full_text_set.add(full_text)
+                    level = 'edge'
+                    
+                if len(passage_id_list)==0:
+                    continue
+
+                if table_id not in exist_table:
+                    exist_table[table_id] = 1
+                    
                     if 'answers' in original_sample:
                         pasg_has_answer = has_answer(original_sample['answers'], full_text, tokenizer, 'string')
                     else:
                         pasg_has_answer = False
+
                     if len(all_included) == k:
                         break
-                    all_included.append({'id':subgraph['table_id'], 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m]), 'table_name': table_name})
+                    
+                    all_included.append({'id':table_id, 'graph_id':doc_id, 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m]), 'table_name': table_name, 'linked_passage_list': passage_id_list, 'hierarchical_level': level})
+                
+                for passage_id in passage_id_list:
+                    
+                    if passage_id in exist_passage:
+                        continue
+                    
+                    exist_passage[passage_id] = 1
+                    passage = all_passages[passage_id]
+                    full_text = header + '\n' + rows[row_id] + '\n' + passage['title'] + ' ' + passage['text']
+
+                    if 'answers' in original_sample:
+                        pasg_has_answer = has_answer(original_sample['answers'], full_text, tokenizer, 'string')
+                    else:
+                        pasg_has_answer = False
+                    
+                    if len(all_included) == k:
+                        break
+                    
+                    all_included.append({'id':table_id, 'graph_id':doc_id, 'title': table_title, 'text': full_text, 'has_answer': pasg_has_answer, 'score': float(D[j][m]), 'table_name': table_name, 'linked_passage_name': passage_id, 'hierarchical_level': level})
+                
+                if len(all_included) == k:
+                    break
+        
         original_sample['ctxs'] = all_included
         time2 = time.time()
         time_list.append(time2-time1)
+        
         for l, limit in enumerate(limits):
             
             if any([ctx['has_answer'] for ctx in all_included[:limit]]):
                 answer_recall[l] += 1
 
         new_data.append(original_sample)
+    
     for l, limit in enumerate(limits):
         print ('answer recall', limit, answer_recall[l]/len(data))
     print ('average time', np.mean(time_list))
+    
     result_path = cfg.result_path.split('.')[0] + '_' + cfg.hierarchical_level + '.json'
+    time_path = cfg.result_path.split('.')[0] + '_' + cfg.hierarchical_level + '_time.json'
+    
     with open(result_path, 'w') as f:
         json.dump(new_data, f, indent=4)
-    time_path = cfg.result_path.split('.')[0] + '_' + cfg.hierarchical_level + '_time.json'
     with open(time_path, 'w') as f:
         json.dump(time_list, f, indent=4)
+        
 if __name__ == "__main__":
     main()

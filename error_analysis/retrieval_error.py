@@ -30,15 +30,28 @@ for raw_graph in tqdm(raw_graphs, desc="Processing graphs"):
 # Analysis Settings
 hierarchical_levels = ['star', 'edge', 'both'] # ['star', 'edge']
 is_colbert, search_space = True, None # True, larger
-for is_colbert in [True, False]:
+for is_colbert in [False]:
+    if is_colbert:
+        search_space_list = ['larger']
+    else:
+        search_space_list = [None]
     # Analyze Error Instances for Each Hierarchical Level
-    for search_space in [None, 'larger']:
+    for search_space in search_space_list:#, 'larger'
         for level in hierarchical_levels:
+            if is_colbert:
+                print("colbert")
+            else:
+                print("cos")
+            print(f"Analyzing {level} level and {search_space} search space")
             prefix = "colbert_" if is_colbert else ""
             space_suffix = f"_{search_space}" if is_colbert and search_space is not None else ""
-
-            base_path = f'/home/shpark/COS/error_analysis/results/{prefix}{level}{space_suffix}'
-            query_results_path = f"/mnt/sdd/shpark/graph/query_results/graph_query_results_2_{prefix}{level}{space_suffix}.json"
+            
+            if is_colbert:
+                query_results_path = f"/mnt/sdc/shpark/graph/query_results_2/colbert_graph_query_results_fix_table_error_k_500_{level}{space_suffix}.json"
+                base_path = f'/home/shpark/COS/error_analysis/results_colbert_top_500/{prefix}{level}{space_suffix}'
+            else:
+                query_results_path = f"/mnt/sdd/shpark/graph/query_results_2/cos_graph_query_results_fix_table_error_k_500_{level}{space_suffix}.json"
+                base_path = f'/home/shpark/COS/error_analysis/results_cos_top_500/{prefix}{level}{space_suffix}'
             
             with open(query_results_path, 'r') as file:
                 query_results = json.load(file)
@@ -46,7 +59,7 @@ for is_colbert in [True, False]:
             error_instances, error_instances_ids, data_error_instances, table_instances, passage_instances, table_passage_instances = [], [], [], [], [], []
             
             for idx, instance in enumerate(tqdm(dev_instances, desc=f"Analyzing {level} level")):
-                if not any(ctx["has_answer"] for ctx in query_results[idx]["ctxs"]):
+                if not any(ctx["has_answer"] for ctx in query_results[idx]["ctxs"][:100]):
                     error_instances.append(query_results[idx])
                     error_instances_ids.append(idx)
             print(f"Total Error for {level}: {len(error_instances)}")
@@ -64,7 +77,7 @@ for is_colbert in [True, False]:
                     if list(gold_passage_set)[0] is None:
                         table_instances.append(query_results[idx])
                     else:
-                        gold_table = any('_'.join(ctx['table_name'].split('_')[:-1]) == instance['positive_table'] for ctx in query_results[idx]["ctxs"])
+                        gold_table = any('_'.join(ctx['table_name'].split('_')[:-1]) == instance['positive_table'] for ctx in query_results[idx]["ctxs"][:100])
                         if gold_table:
                             passage_instances.append(query_results[idx])
                         else:

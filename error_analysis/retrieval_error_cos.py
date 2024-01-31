@@ -13,7 +13,7 @@ print(f"Loading {total_dev} instances...")
 dev_instances = [doc for doc in tqdm(dev_collection.find(), total=total_dev)]
 print("finish loading dev set")
 
-query_results_path = "/mnt/sdd/shpark/graph/query_results/graph_query_results_2_colbert_star_larger.json"
+query_results_path = "/mnt/sdd/shpark/cos/models/ott_dev_core_reader_hop1keep200_shard0_of_1.json"
 with open(query_results_path, 'r') as file:
     query_results = json.load(file)
 error_instances = []
@@ -26,7 +26,7 @@ for i, instance in enumerate(tqdm(dev_instances)):
             has_answer = True
             break
     if not has_answer:
-        error_instances.append(i)
+        error_instances.append(query_results[i])
 print(len(error_instances))
-with open('/home/shpark/COS/error_analysis/results/error_instances_colbert_star_larger.json', 'w') as file:
+with open('/home/shpark/COS/error_analysis/results/cos_error_instances.json', 'w') as file:
     json.dump(error_instances, file, indent=4)

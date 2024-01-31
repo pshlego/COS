@@ -99,7 +99,7 @@ def main(cfg: DictConfig):
             indicies, view2entity = index_builder.build(cfg.entity_linking['dest_type'])
             
             print('index building finished')
-            entity_linker = MVDEntityLinker(entity_linking_cfg, indicies[cfg.entity_linking['dest_type']], view2entity[cfg.entity_linking['dest_type']], index_builder.embedder)
+            entity_linker = MVDEntityLinker(entity_linking_cfg, indicies[cfg.entity_linking['dest_type']], view2entity[cfg.entity_linking['dest_type']], index_builder.embedder, mongodb)
             for source_type in source_types:
                 
                 entity_linking_result_path = entity_linking_cfg['result_path'].split('.')[0] + '_' + source_type + '_' + cfg.entity_linking['dest_type'] +'.json'

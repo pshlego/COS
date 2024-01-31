@@ -19,7 +19,7 @@ def read_json_files(folder_path):
                     # Read the JSON file
                     data_dict = {}
                     data = json.load(file)
-                    data_dict['chunk_id'] = filename.split('.')[0]
+                    data_dict['chunk_id'] = '.'.join(filename.split('.')[:-1])
                     data_dict['title'] = data['title']
                     gold_link_list = []
                     for row_id, row in enumerate(data['data']):
@@ -39,7 +39,7 @@ def read_json_files(folder_path):
     return json_files_list
 
 # Example usage
-folder_path = "/mnt/sdd/shpark/data/shpark/preprocessed/tables_tok"  # Replace with your folder path
+folder_path = "/mnt/sdc/shpark/data/data/shpark/preprocessed/tables_tok"  # Replace with your folder path
 json_data = read_json_files(folder_path)
-with open('/mnt/sdd/shpark/graph/gold_link/gold_link.json', 'w') as outfile:
+with open('/mnt/sdd/shpark/graph/gold_link/gold_link_2.json', 'w') as outfile:
     json.dump(json_data, outfile)

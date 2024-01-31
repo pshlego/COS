@@ -1,7 +1,7 @@
 defaults:
   - encoder: hf_bert # defines encoder initialization parameters
 
-result_path: /mnt/sdd/shpark/graph/query_results/graph_query_results_2.json
+result_path: /mnt/sdd/shpark/graph/query_results_2/cos_graph_query_results_fix_table_error_k_500.json
 # "regex" or "string"
 match: string
 n_docs: 100
@@ -71,7 +71,9 @@ port: 27017
 # Input
 qa_dataset_path: /mnt/sdd/shpark/cos/OTT-QA/ott_dev_q_to_tables_with_bm25neg.json
 embedding_file_path_list: [/mnt/sdc/shpark/graph/embeds/star_embeds_author_2_0, /mnt/sdc/shpark/graph/embeds/edge_embeds_author_2_0] #/mnt/sdd/shpark/graph/embeds/edge_embeds_author_2_0, /mnt/sdd/shpark/graph/embeds/star_embeds_author_2_0
+table_data_file_path: /mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json
 table_collection_name: ott_table
+passage_data_file_path: /mnt/sdd/shpark/cos/knowledge/ott_wiki_passages.json
 passage_collection_name: ott_wiki_passages
 graph_collection_name_list: [preprocess_table_graph_author_w_score_2_star, preprocess_table_graph_author_w_score_2_edge] #preprocess_table_graph_author_w_score_2_edge, preprocess_table_graph_author_w_score_2_star
 hierarchical_level: both #edge, star, both

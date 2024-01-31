@@ -28,7 +28,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 ColBERT/
-error_analysis/results/
+error_analysis/results_all/
 plot/
 experiments/
 # PyInstaller

@@ -190,7 +190,7 @@ class COSEntityLinker:
         return table_chunks, table_chunk_ids, cells, indices, rows
     
 class MVDEntityLinker:
-    def __init__(self, cfg, index, view2entity, embedder):
+    def __init__(self, cfg, index, view2entity, embedder, mongodb):
         # TODO: Change the cfg according to the below code.
         self.cfg = cfg
         self.index = index
@@ -198,19 +198,22 @@ class MVDEntityLinker:
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.mention_embedder = embedder
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        self.mongodb = mongodb
+        
     def link(self, source_type, detected_mentions):
         mention_queries = self.prepate_mention_queries(source_type, detected_mentions)
         
         results = self.entity_linking(mention_queries)
         
         result_path = self.cfg.result_path
-        
-        collection_name = os.path.basename(result_path).split('.')[0]
-        collection = self.mongodb[collection_name]
-        collection.insert_many(results)
-        
-        json.dump(results, open(result_path, 'w'), indent=4)
+        try:
+            collection_name = os.path.basename(result_path).split('.')[0]
+            collection = self.mongodb[collection_name]
+            collection.insert_many(results)
+            
+            json.dump(results, open(result_path, 'w'), indent=4)
+        except:
+            json.dump(results, open(result_path, 'w'), indent=4)
 
     def prepate_mention_queries(self, source_type, detected_mentions):
         if source_type == 'table':
