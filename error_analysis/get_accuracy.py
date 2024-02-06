@@ -5,7 +5,7 @@ is_colbert, search_space = True, None # True, larger
 limits = [1, 5, 10, 20, 50, 100]
 k = 100
 
-for is_colbert in [True, False]:
+for is_colbert in [True]:
     # Analyze Error Instances for Each Hierarchical Level
     if is_colbert:
         search_space_list = ['larger']

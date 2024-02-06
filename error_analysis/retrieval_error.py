@@ -30,7 +30,7 @@ for raw_graph in tqdm(raw_graphs, desc="Processing graphs"):
 # Analysis Settings
 hierarchical_levels = ['star', 'edge', 'both'] # ['star', 'edge']
 is_colbert, search_space = True, None # True, larger
-for is_colbert in [False]:
+for is_colbert in [True, False]:
     if is_colbert:
         search_space_list = ['larger']
     else:
@@ -47,11 +47,11 @@ for is_colbert in [False]:
             space_suffix = f"_{search_space}" if is_colbert and search_space is not None else ""
             
             if is_colbert:
-                query_results_path = f"/mnt/sdc/shpark/graph/query_results_2/colbert_graph_query_results_fix_table_error_k_500_{level}{space_suffix}.json"
-                base_path = f'/home/shpark/COS/error_analysis/results_colbert_top_500/{prefix}{level}{space_suffix}'
+                query_results_path = f"/home/shpark/mnt_sdc/shpark/graph/query_results_2/colbert_graph_query_results_fix_table_error_k_500_{level}{space_suffix}.json"
+                base_path = f'/home/shpark/COS/error_analysis/results_all/fix_gold_passage_error/colbert/{prefix}{level}{space_suffix}'
             else:
-                query_results_path = f"/mnt/sdd/shpark/graph/query_results_2/cos_graph_query_results_fix_table_error_k_500_{level}{space_suffix}.json"
-                base_path = f'/home/shpark/COS/error_analysis/results_cos_top_500/{prefix}{level}{space_suffix}'
+                query_results_path = f"/home/shpark/mnt_sdc/shpark/graph/graph/query_results_2/cos_graph_query_results_fix_table_error_k_500_{level}{space_suffix}.json"
+                base_path = f'/home/shpark/COS/error_analysis/results_all/fix_gold_passage_error/cos/{prefix}{level}{space_suffix}'
             
             with open(query_results_path, 'r') as file:
                 query_results = json.load(file)
@@ -66,15 +66,14 @@ for is_colbert in [False]:
 
             for idx in error_instances_ids:
                 instance = dev_instances[idx]
-                gold_passage_set = {gold_passage for positive_ctx in instance['positive_ctxs'] for gold_passage in positive_ctx['target_pasg_titles']}
+                gold_passage_set = {gold_passage for positive_ctx in instance['positive_ctxs'] for gold_passage in positive_ctx['target_pasg_titles'] if gold_passage is not None}
                 linked_passage_set = graphs[instance['positive_table']]
 
-                if gold_passage_set.isdisjoint(linked_passage_set) and list(gold_passage_set)[0] is not None:
+                if gold_passage_set.isdisjoint(linked_passage_set) and len(list(gold_passage_set)) > 0:
                     data_error_instances.append(query_results[idx])
                     error_instance = query_results[idx]
-                    error_instance['id'] = idx  # Include instance ID for reference
                 else:
-                    if list(gold_passage_set)[0] is None:
+                    if len(list(gold_passage_set)) == 0:
                         table_instances.append(query_results[idx])
                     else:
                         gold_table = any('_'.join(ctx['table_name'].split('_')[:-1]) == instance['positive_table'] for ctx in query_results[idx]["ctxs"][:100])

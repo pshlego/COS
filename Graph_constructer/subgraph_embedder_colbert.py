@@ -12,9 +12,9 @@ def main(cfg: DictConfig):
     with MongoClient(f"mongodb://{cfg.username}:{cfg.password}@localhost:{cfg.port}/") as client:
         mongodb = client[cfg.dbname]
         collection_names = cfg.collection_names
-        collection_tsv_path = cfg.collection_root_dir_path + f"/{cfg.hierarchical_level}.tsv"
-        index_to_chunk_id_path = cfg.collection_root_dir_path + f"/index_to_chunk_id_{cfg.hierarchical_level}.json"
-        chunk_id_to_index_path = cfg.collection_root_dir_path + f"/chunk_id_to_index_{cfg.hierarchical_level}.json"
+        collection_tsv_path = cfg.collection_root_dir_path + f"/{cfg.hierarchical_level}_topk.tsv"
+        index_to_chunk_id_path = cfg.collection_root_dir_path + f"/index_to_chunk_id_{cfg.hierarchical_level}_topk.json"
+        chunk_id_to_index_path = cfg.collection_root_dir_path + f"/chunk_id_to_index_{cfg.hierarchical_level}_topk.json"
         index_to_chunk_id = {}
         chunk_id_to_index = {}
         
@@ -35,7 +35,7 @@ def main(cfg: DictConfig):
                 json.dump(chunk_id_to_index, json_file2, ensure_ascii=False, indent=4)
                 json.dump(index_to_chunk_id, json_file, ensure_ascii=False, indent=4)
             
-    experiment_name = cfg.experiment_name + f"_{cfg.hierarchical_level}_512"
+    experiment_name = cfg.experiment_name + f"_{cfg.hierarchical_level}_512_topk"
         
     with Run().context(RunConfig(nranks=3, experiment=experiment_name)):
         config = ColBERTConfig(

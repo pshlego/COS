@@ -1,7 +1,7 @@
 defaults:
   - encoder: hf_bert # defines encoder initialization parameters
 
-result_path: /mnt/sdc/shpark/graph/query_results_2/colbert_graph_query_results_fix_table_error_k_500_length_512.json
+result_path: /home/shpark/mnt_sdc/shpark/query_result/colbert/star_1/colbert_graph_query_results_fix_table_error_k_700_length_512_filtered.json
 # "regex" or "string"
 match: string
 n_docs: 100
@@ -39,7 +39,7 @@ kilt_out_file:
 table_chunk_file:
 label_question: False
 # A trained bi-encoder checkpoint file to initialize the model
-model_file: /mnt/sdc/shpark/cos/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+model_file: /home/shpark/mnt_sdc/shpark/cos/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
 
 validate_as_tables: False
 rpc_retriever_cfg_file:
@@ -69,15 +69,21 @@ password: 1234
 port: 27017
 
 # Input
-qa_dataset_path: /mnt/sdc/shpark/cos/cos/OTT-QA/ott_dev_q_to_tables_with_bm25neg.json
-table_data_file_path: /mnt/sdc/shpark/cos/cos/knowledge/ott_table_chunks_original.json
+qa_dataset_path: /home/shpark/mnt_sdc/shpark/cos/cos/OTT-QA/ott_dev_q_to_tables_with_bm25neg.json
+table_data_file_path: /home/shpark/mnt_sdc/shpark/cos/cos/knowledge/ott_table_chunks_original.json
 table_collection_name: ott_table
-passage_data_file_path: /mnt/sdc/shpark/cos/cos/knowledge/ott_wiki_passages.json
+passage_data_file_path: /home/shpark/mnt_sdc/shpark/cos/cos/knowledge/ott_wiki_passages.json
 passage_collection_name: ott_wiki_passages
-graph_collection_name_list: [preprocess_table_graph_author_w_score_2_star, preprocess_table_graph_author_w_score_2_edge] #preprocess_table_graph_author_w_score_2_edge, preprocess_table_graph_author_w_score_2_star
-doc_ids: /mnt/sdd/shpark/colbert/data/index_to_chunk_id_both.json
+graph_collection_name_list: [preprocess_table_graph_cos_apply_topk_edge_5, preprocess_table_graph_cos_apply_topk_star_5] #preprocess_table_graph_author_w_score_2_edge, preprocess_table_graph_author_w_score_2_star
+edge_graph_collection_name: preprocess_table_graph_cos_apply_topk_edge_5
+star_graph_collection_name: preprocess_table_graph_cos_apply_topk_star_5
+doc_ids: /mnt/sdc/shpark/colbert/data/index_to_chunk_id_both_topk.json
 hierarchical_level: both # edge, star, both
-collection_root_dir_path: /mnt/sdd/shpark/colbert/data
+collection_root_dir_path: /mnt/sdc/shpark/colbert/data
 index_root: /mnt/sdd/shpark/colbert/data/experiments/default/indexes
 scale: larger # None, larger
 nbits: 2
+selection_method: topk #, topp, thr
+topk: 2
+topp: 0.5
+thr: 0.5
