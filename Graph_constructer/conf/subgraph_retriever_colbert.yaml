@@ -1,7 +1,7 @@
 defaults:
   - encoder: hf_bert # defines encoder initialization parameters
 
-result_path: /home/shpark/mnt_sdc/shpark/query_result/colbert/star_1/colbert_graph_query_results_fix_table_error_k_700_length_512_filtered.json
+result_path: /home/shpark/mnt_sdc/shpark/query_result/colbert/normalize/colbert_graph_query_results_fix_table_error_k_700_length_512_filtered.json
 # "regex" or "string"
 match: string
 n_docs: 100

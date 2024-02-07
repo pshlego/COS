@@ -25,12 +25,12 @@ def build_query(filename):
     return data 
 
 def min_max_normalize(scores):
-    mMscaler = MinMaxScaler()
-    scores = np.array(scores).reshape(len(scores),1).tolist()
-    mMscaler.fit(scores)
-    mMscaled_data = mMscaler.transform(scores)
-    mMscaled_data = pd.DataFrame(mMscaled_data).values.squeeze().tolist()
-    return mMscaled_data
+    min_val = np.min(scores)
+    max_val = np.max(scores)
+    if min_val == max_val:
+        return np.ones(len(scores))
+    normalized = (scores - min_val) / (max_val - min_val)
+    return normalized.squeeze()
 
 def sort_page_ids_by_scores(page_ids, page_scores):
     # Combine page IDs and scores into a list of tuples
@@ -67,12 +67,13 @@ def main(cfg: DictConfig):
     graphs = [graph for graph in tqdm(graph_collection.find(), total=total_graphs)]
     json_path = "/mnt/sdc/shpark/colbert/data/chunk_id_to_index_both_topk.json"
     chunk_id_to_index_both_topk = json.load(open(json_path))
-    
-    for selection_method in ['topp']:
+    # mMscaler = MinMaxScaler()
+    for selection_method in ['thr']:
         if selection_method == 'thr':
-            parameters = [60.94, 56.85, 54.61, 52.75, 50.50]
+            # parameters = [0.95, 0.9, 0.7, 0.5, 0.3, 0.1]
+            parameters = [0.975] #[0.95, 0.925, 0.875, 0.85, 0.825, 0.8]
         elif selection_method == 'topp':
-            parameters = [0.5, 0.3, 0.1]
+            parameters = [0.7, 0.5, 0.3, 0.1]
         elif selection_method == 'topk':
             parameters = [1, 2, 3, 4, 5]
         for parameter in parameters:
@@ -88,20 +89,16 @@ def main(cfg: DictConfig):
                         for mention_id, mention_dict in graph['mentions_in_row_info_dict'].items():
                             normalizes_score_list = min_max_normalize(mention_dict['mention_linked_entity_score_list'])
                             acc_score = 0
-                            temperature = 1
-                            graph_scores = np.array([graph_score*temperature for graph_score in normalizes_score_list])
-                            softmax_scores = np.exp(graph_scores) / np.sum(np.exp(graph_scores), axis=0)
-                            softmax_scores = softmax_scores.tolist()
+                            temperature = 1  # Consider removing if temperature is always 1, as it doesn't change the output
+                            exp_scores = np.exp(normalizes_score_list * temperature)
+                            softmax_scores = exp_scores / exp_scores.sum()  # More efficient softmax calculation
                             for row_k, mention_linked_entity_id in enumerate(mention_dict['mention_linked_entity_id_list']):
-                                edge_id = graph['chunk_id'] + f"_{mention_id}" + f"_{row_k}"
-                                try:
-                                    pid = chunk_id_to_index_both_topk[edge_id]
-                                except:
-                                    acc_score += softmax_scores[row_k]
-                                    continue
-                                if acc_score > parameter:
+                                edge_id = f"{graph['chunk_id']}_{mention_id}_{row_k}"
+                                pid = chunk_id_to_index_both_topk.get(edge_id)  # Use `.get` to handle missing keys more efficiently
+                                if pid is not None and acc_score > parameter:
                                     pid_deleted_list.append(int(pid))
-                                acc_score += softmax_scores[row_k]
+                                else:
+                                    acc_score += softmax_scores[row_k]
                 
                 # chunk_id_identifier = None
                 # for i, graph in enumerate(tqdm(edge_graphs)):
@@ -134,19 +131,16 @@ def main(cfg: DictConfig):
                         for mention_id, mention_dict in graph['mentions_in_row_info_dict'].items():
                             normalizes_score_list = min_max_normalize(mention_dict['mention_linked_entity_score_list'])
                             for row_k, mention_linked_entity_id in enumerate(mention_dict['mention_linked_entity_id_list']):
-                                edge_id = graph['chunk_id'] + f"_{mention_id}" + f"_{row_k}"
-                                try:
-                                    pid = chunk_id_to_index_both_topk[edge_id]
-                                except:
-                                    continue
-                                if normalizes_score_list[row_k] < parameter:
+                                edge_id = f"{graph['chunk_id']}_{mention_id}_{row_k}"  # Use f-string for efficient concatenation
+                                pid = chunk_id_to_index_both_topk.get(edge_id)  # Use .get() to avoid try-except for missing keys
+                                if pid is not None and normalizes_score_list[row_k] < parameter:
                                     pid_deleted_list.append(int(pid))
                 # for i, graph in enumerate(tqdm(edge_graphs)):
                 #     if 'linked_entity_score' in graph:
                 #         if graph['linked_entity_score'] < parameter:
                 #             pid_deleted_list.append(i)
             parameter_name = str(parameter).replace('.', '_')
-            path = f"/mnt/sdd/shpark/colbert/data/{selection_method}_{parameter_name}.json"
+            path = f"/mnt/sdd/shpark/colbert/data/normalized_{selection_method}_{parameter_name}.json"
             with open(path, 'w') as f:
                 json.dump(pid_deleted_list, f, indent=4)
 

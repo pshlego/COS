@@ -16,6 +16,14 @@ import torch
 logger = logging.getLogger()
 setup_logger(logger)
 
+def min_max_normalize(scores):
+    min_val = np.min(scores)
+    max_val = np.max(scores)
+    if min_val == max_val:
+        return np.ones(len(scores))
+    normalized = (scores - min_val) / (max_val - min_val)
+    return normalized.squeeze()
+
 def build_query(filename):
     data = json.load(open(filename))
     for sample in data:
@@ -91,12 +99,13 @@ def main(cfg: DictConfig):
     edge_index_max = 80182286
     pid_deleted_list = []
     # total_edge_graphs = edge_graph_collection.count_documents({})
-    for selection_method in ['thr', 'topp', 'topk']:
+    for selection_method in ['thr']:
         if selection_method == 'thr':
-            parameters = [60.94, 56.85, 54.61, 52.75]
+            parameters = [0.975, 0.925, 0.875, 0.85, 0.825, 0.8] # [0.95, 0.9, 0.7, 0.5, 0.3, 0.1]
+            # parameters = [60.94, 56.85, 54.61, 52.75]
             # parameters = [60.94, 56.85, 54.61, ]
         elif selection_method == 'topp':
-            parameters = [0.3, 0.5, 0.7]
+            parameters = [0.9, 0.7, 0.5, 0.3, 0.1]
             # parameters = [0.9]
         elif selection_method == 'topk':
             parameters = [2, 3, 4, 5]
@@ -106,42 +115,11 @@ def main(cfg: DictConfig):
             time_list = []
             answer_recall = [0]*len(limits)
             parameter_name = str(parameter).replace('.', '_')
-            pid_deleted_list = json.load(open(f"/mnt/sdd/shpark/colbert/data/{selection_method}_{parameter_name}.json", 'r'))
-            # if selection_method == 'topk':
-            #     pid_deleted_list = json.load(open("/mnt/sdd/shpark/colbert/data/topk_2.json", 'r'))
-                # for i, (chunk_id, graph) in enumerate(tqdm(edge_graphs.items())):
-                #     if 'topk' in graph:
-                #         if graph['topk'] >= cfg.topk:
-                #             pid_deleted_list.append(i)
-                            
-            # elif selection_method == 'topp':
-            #     for i, (chunk_id, graph) in enumerate(tqdm(edge_graphs.items())):
-            #         current_chunk_id_identifier = '_'.join(chunk_id.split('_')[:2])
-            #         if chunk_id_identifier is None or chunk_id_identifier != current_chunk_id_identifier:
-            #             if chunk_id_identifier is not None:
-            #                 sorted_topp_list = sorted(topp_list, key=lambda x: x[1], reverse=True)
-            #                 acc_score = 0
-            #                 graph_scores = np.array([graph_score for _, graph_score in sorted_topp_list])
-            #                 softmax_scores = np.exp(graph_scores) / np.sum(np.exp(graph_scores), axis=0)
-            #                 softmax_scores = softmax_scores.tolist()
-                            
-            #                 for id, (j, graph_score) in enumerate(sorted_topp_list):
-            #                     if acc_score > cfg.topp:
-            #                         pid_deleted_list.append(j)
-            #                     acc_score += softmax_scores[id]
-                        
-            #             topp_list = []
-            #             chunk_id_identifier = current_chunk_id_identifier
-
-            #         if 'linked_entity_score' in graph:
-            #             topp_list.append((i, graph['linked_entity_score']))
-                        
-            # elif selection_method == 'thr':
-            #     for i, (chunk_id, graph) in enumerate(tqdm(edge_graphs.items())):
-            #         if 'linked_entity_score' in graph:
-            #             if graph['linked_entity_score'] <= cfg.thr:
-            #                 pid_deleted_list.append(i)
-
+            if selection_method == 'topk':
+                pid_deleted_list = json.load(open(f"/mnt/sdd/shpark/colbert/data/{selection_method}_{parameter_name}.json", 'r'))
+            else:
+                pid_deleted_list = json.load(open(f"/mnt/sdd/shpark/colbert/data/normalized_{selection_method}_{parameter_name}.json", 'r'))
+            
             values_to_remove = torch.tensor(pid_deleted_list, dtype=torch.int32).to("cuda")
             
             for i in tqdm(range(0, len(data), b_size)):
@@ -184,40 +162,40 @@ def main(cfg: DictConfig):
                         if 'mentions_in_row_info_dict' in subgraph:
                             passage_chunk_id_list = []
                             passage_score_list = []
-                            #if selection_method == 'topk':
-                            for rid, r_dict in subgraph['mentions_in_row_info_dict'].items():
-                                for row_k, mention_linked_entity_id in enumerate(r_dict['mention_linked_entity_id_list']):
-                                    if row_k < 1:
-                                    #if row_k < parameter:
-                                        passage_chunk_id_list.append(mention_linked_entity_id)
-                                        passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
-                            # elif selection_method == 'topp':
-                            #     for rid, r_dict in subgraph['mentions_in_row_info_dict'].items():
-                            #         zipped_list = list(zip(r_dict['mention_linked_entity_id_list'], r_dict['mention_linked_entity_score_list']))
-                            #         sorted_topp_list = sorted(zipped_list, key=lambda x: x[1], reverse=True)
-                            #         acc_score = 0
-                            #         temperature = 0.1
-                            #         graph_scores = np.array([graph_score*temperature for _, graph_score in sorted_topp_list])
-                            #         softmax_scores = np.exp(graph_scores) / np.sum(np.exp(graph_scores), axis=0)
-                            #         softmax_scores = softmax_scores.tolist()
-                            #         for row_k, mention_linked_entity_id in enumerate(r_dict['mention_linked_entity_id_list']):
-                            #             if acc_score <= parameter:
-                            #                 passage_chunk_id_list.append(mention_linked_entity_id)
-                            #                 passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
-                            #             else:
-                            #                 passage_chunk_id_list.append(mention_linked_entity_id)
-                            #                 passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
-                            #                 break
-                            #             acc_score += softmax_scores[row_k]
-                            # elif selection_method == 'thr':
-                            #     for rid, r_dict in subgraph['mentions_in_row_info_dict'].items():
-                            #         for row_k, mention_linked_entity_id in enumerate(r_dict['mention_linked_entity_id_list']):
-                            #             if r_dict['mention_linked_entity_score_list'][row_k] >= parameter:
-                            #                 passage_chunk_id_list.append(mention_linked_entity_id)
-                            #                 passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
+                            if selection_method == 'topk':
+                                for rid, r_dict in subgraph['mentions_in_row_info_dict'].items():
+                                    for row_k, mention_linked_entity_id in enumerate(r_dict['mention_linked_entity_id_list']):
+                                        #if row_k < 1:
+                                        if row_k < parameter:
+                                            passage_chunk_id_list.append(mention_linked_entity_id)
+                                            passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
+                            elif selection_method == 'topp':
+                                for rid, r_dict in subgraph['mentions_in_row_info_dict'].items():
+                                    normalizes_score_list = min_max_normalize(r_dict['mention_linked_entity_score_list'])
+                                    acc_score = 0
+                                    temperature = 1  # Consider removing if temperature is always 1, as it doesn't change the output
+                                    exp_scores = np.exp(normalizes_score_list * temperature)
+                                    softmax_scores = exp_scores / exp_scores.sum()  # More efficient softmax calculation
+                                    for row_k, mention_linked_entity_id in enumerate(r_dict['mention_linked_entity_id_list']):
+                                        if acc_score <= parameter:
+                                            passage_chunk_id_list.append(mention_linked_entity_id)
+                                            passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
+                                        else:
+                                            passage_chunk_id_list.append(mention_linked_entity_id)
+                                            passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
+                                            break
+                                        acc_score += softmax_scores[row_k]
+                            elif selection_method == 'thr':
+                                for rid, r_dict in subgraph['mentions_in_row_info_dict'].items():
+                                    normalizes_score_list = min_max_normalize(r_dict['mention_linked_entity_score_list'])
+                                    for row_k, mention_linked_entity_id in enumerate(r_dict['mention_linked_entity_id_list']):
+                                        if normalizes_score_list[row_k] >= parameter:
+                                            passage_chunk_id_list.append(mention_linked_entity_id)
+                                            passage_score_list.append(r_dict['mention_linked_entity_score_list'][row_k])
                                     
                             passage_id_list = sort_page_ids_by_scores(passage_chunk_id_list, passage_score_list)
                             level = 'star'
+                            #TODO: how to filter unrelated passages
                         else:
                             if 'linked_entity_id' in subgraph:
                                 passage_id_list = [subgraph['linked_entity_id']]
