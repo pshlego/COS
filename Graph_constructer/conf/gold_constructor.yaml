@@ -1,0 +1,34 @@
+defaults:
+  - encoder: hf_bert
+
+table:
+  chunk_path: /mnt/sdd/shpark/graph/for_test/ott_table_chunks_original_with_row_indices.json
+  result_path: /mnt/sdd/shpark/graph/for_test/all_table_chunks_span_prediction.json
+
+passage:
+  chunk_path: /mnt/sdd/shpark/graph/for_test/ott_passage_chunks_original_with_indices.json
+  result_path: /mnt/sdd/shpark/graph/for_test/all_passage_chunks_span_prediction.json
+
+# The maximum total input mention context left/right length after WordPiece tokenization.
+max_mention_context_length: 128
+
+# A trained bi-encoder checkpoint file to initialize the model
+model_file: /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+expert_id: 5
+batch_size: 128
+
+# Batch size to generate query embeddings
+do_span: True
+
+# Whether to lower case the input text. Set True for uncased models, False for the cased ones.
+do_lower_case: True
+special_tokens:
+
+# local_rank for distributed training on gpus
+device_id: 0
+local_rank: -1
+device:
+distributed_world_size:
+no_cuda: False
+n_gpu:
+fp16: False
