@@ -13,7 +13,7 @@ passage:
 max_mention_context_length: 128
 
 # A trained bi-encoder checkpoint file to initialize the model
-model_file: /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+model_file: /mnt/sdf/shpark/mnt_sdc/shpark/cos/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
 expert_id: 5
 batch_size: 128
 

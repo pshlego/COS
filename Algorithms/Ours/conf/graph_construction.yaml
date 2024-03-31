@@ -7,7 +7,7 @@ mention_detection:
   source_type: table # table, passage, both
 
 entity_linking:
-  linking_type: mvd # cos, mvd
+  linking_type: cos # cos, mvd
   source_type: table # table, passage, both
   dest_type: passage # table, passage, both
 
@@ -18,7 +18,7 @@ password: 1234
 port: 27017
 
 # Graph construction steps
-do_mention_detection: True
+do_mention_detection: False
 do_entity_linking: True
 
 # Run on gpus

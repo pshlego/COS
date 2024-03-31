@@ -1,0 +1,39 @@
+
+# Install
+apt-get update
+apt-get install wget
+apt-get install git
+
+# Download Miniconda
+mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm -rf ~/miniconda3/miniconda.sh
+
+# Miniconda Settings
+export PATH=~/miniconda3/bin/:$PATH
+conda init bash
+
+# Clone git
+git clone https://github.com/pshlego/COS.git
+
+
+# Download requirments
+cd COS
+    # Make pytrec-eval to comment (error occurs)
+conda env create -f cos.yml
+
+# Activate Virtual Environment
+conda activate hf4
+
+# Install pymongo
+pip3 install pymongo
+
+# Add pythonpath
+export PYTHONPATH=$PYTHONPATH:/root/COS
+
+python -m spacy download en
+pip uninstall faiss-cpu
+pip uninstall faiss
+pip uninstall faiss-gpu
+pip install faiss-gpu

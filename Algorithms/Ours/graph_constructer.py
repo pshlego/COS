@@ -18,8 +18,8 @@ from pymongo import MongoClient
 @hydra.main(config_path="conf", config_name="graph_construction")
 def main(cfg: DictConfig):
     # set mongoDB
-    client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
-    mongodb = client[cfg.dbname]
+    # client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
+    mongodb = None
 
     data_sources = {}
     

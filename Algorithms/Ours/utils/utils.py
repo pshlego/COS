@@ -75,7 +75,7 @@ def get_row_indices(question, tokenizer):
     tokens = []
     for row in rows:
         tokens.extend(tokenizer.tokenize(row))
-        indices.append(len(tokens)+1)
+        indices.append(len(tokens) + 1)
     assert tokens == original_input
     return indices
 

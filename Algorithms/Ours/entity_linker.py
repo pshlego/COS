@@ -27,7 +27,7 @@ setup_logger(logger)
 class COSEntityLinker:
     def __init__(self, cfg, mongodb):
         self.cfg = cfg
-        self.mongodb = mongodb
+        # self.mongodb = mongodb
     
     def link(self, source_type, dest_type):
         encoder, tensorizer, gpu_index_flat, doc_ids = self.set_up_encoder(sequence_length = 512, dest_type = dest_type)
@@ -66,9 +66,9 @@ class COSEntityLinker:
             result_path = self.cfg.result_path
             
             json.dump(results, open(result_path, 'w'), indent=4)
-            collection_name = os.path.basename(result_path).split('.')[0]
-            collection = self.mongodb[collection_name]
-            collection.insert_many(results)
+            # collection_name = os.path.basename(result_path).split('.')[0]
+            # collection = self.mongodb[collection_name]
+            # collection.insert_many(results)
             
     def set_up_encoder(self, sequence_length = None, dest_type = 'passage'):
         cfg = setup_cfg_gpu(self.cfg)
@@ -144,15 +144,15 @@ class COSEntityLinker:
         return encoder, tensorizer, gpu_index_flat, doc_ids
     
     def prepare_mentions(self, filename, num_shards, shard_id):
-        collection_list = self.mongodb.list_collection_names()
-        collection_name = os.path.basename(filename).split('.')[0]
+        # collection_list = self.mongodb.list_collection_names()
+        # collection_name = os.path.basename(filename).split('.')[0]
         
-        if collection_name in collection_list:
-            collection = self.mongodb[collection_name]
-            total_num = collection.count_documents({})
-            data = [doc for doc in tqdm(collection.find(), total = total_num)]
-        else:
-            data = json.load(open(filename, 'r'))
+        # if collection_name in collection_list:
+        #     collection = self.mongodb[collection_name]
+        #     total_num = collection.count_documents({})
+        #     data = [doc for doc in tqdm(collection.find(), total = total_num)]
+        # else:
+        data = json.load(open(filename, 'r'))
         
         shard_size = int(len(data)/int(num_shards))
         

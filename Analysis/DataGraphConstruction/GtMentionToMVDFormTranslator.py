@@ -55,9 +55,6 @@ def main(cfg: DictConfig):
 # Translate                                          #
 ######################################################
 
-
-
-
 def translateGtToMvdForm(gt_hyperlinks, config_for_tokenizer):
     
     def setup_encoder():
