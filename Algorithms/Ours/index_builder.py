@@ -194,4 +194,4 @@ class IndexBuilder:
         elif cfg.task_name == 'teacher':
             model = teacher
             config = teacher.rank_encoder.config
-        return model,config
+        return model, config
