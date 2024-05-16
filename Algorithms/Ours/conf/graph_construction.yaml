@@ -1,0 +1,29 @@
+defaults:
+  - encoder: hf_bert
+  - data_sources: ott_qa
+
+# Mention Detection
+mention_detection:
+  source_type: table # table, passage, both
+
+entity_linking:
+  linking_type: cos # cos, mvd
+  source_type: table # table, passage, both
+  dest_type: passage # table, passage, both
+
+# MongoDB
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017
+
+# Graph construction steps
+do_mention_detection: False
+do_entity_linking: True
+
+# Run on gpus
+no_cuda: False
+batch_size: 1024
+top_k: 5
+threshold: 0.95
+max_seq_length: 128

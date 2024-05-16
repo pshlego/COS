@@ -1,0 +1,89 @@
+defaults:
+  - encoder: hf_bert # defines encoder initialization parameters
+
+result_path: /home/shpark/mnt_sdc/shpark/query_result/colbert/normalize/colbert_graph_query_results_fix_table_error_k_700_length_512_filtered.json
+# "regex" or "string"
+match: string
+n_docs: 100
+validation_workers: 16
+
+# Batch size to generate query embeddings
+batch_size: 32
+
+num_shards: 1
+shard_id: 0
+hop1_limit: 100
+hop1_keep: 200
+hop2_limit: 50
+do_retrieve: False
+do_link: False 
+do_span: False
+do_cos: False
+hop2_expert: 4
+mean_pool: False
+
+# Whether to lower case the input text. Set True for uncased models, False for the cased ones.
+do_lower_case: True
+
+# The attribute name of encoder to use for queries. Options for the BiEncoder model: question_model, ctx_model
+# question_model is used if this param is empty
+encoder_path:
+
+# path to the FAISS index location - it is only needed if you want to serialize faiss index to files or read from them
+# (instead of using encoded_ctx_files)
+# it should point to either directory or a common index files prefix name
+# if there is no index at the specific location, the index will be created from encoded_ctx_files
+index_path:
+
+kilt_out_file:
+table_chunk_file:
+label_question: False
+# A trained bi-encoder checkpoint file to initialize the model
+model_file: /home/shpark/mnt_sdc/shpark/cos/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+
+validate_as_tables: False
+rpc_retriever_cfg_file:
+indexer: flat
+
+# tokens which won't be slit by tokenizer
+special_tokens:
+
+# TODO: move to a conf group
+# local_rank for distributed training on gpus
+local_rank: -1
+global_loss_buf_sz: 150000
+device:
+distributed_world_size:
+no_cuda: False
+n_gpu:
+fp16: False
+
+# For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
+#        "See details at https://nvidia.github.io/apex/amp.html
+fp16_opt_level: O1
+
+# MongoDB
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017
+
+# Input
+qa_dataset_path: /home/shpark/mnt_sdc/shpark/cos/cos/OTT-QA/ott_dev_q_to_tables_with_bm25neg.json
+table_data_file_path: /home/shpark/mnt_sdc/shpark/cos/cos/knowledge/ott_table_chunks_original.json
+table_collection_name: ott_table
+passage_data_file_path: /home/shpark/mnt_sdc/shpark/cos/cos/knowledge/ott_wiki_passages.json
+passage_collection_name: ott_wiki_passages
+graph_collection_name_list: [preprocess_table_graph_cos_apply_topk_edge_5, preprocess_table_graph_cos_apply_topk_star_5] #preprocess_table_graph_author_w_score_2_edge, preprocess_table_graph_author_w_score_2_star
+edge_graph_collection_name: preprocess_table_graph_cos_apply_topk_edge_5
+star_graph_collection_name: preprocess_table_graph_cos_apply_topk_star_5
+doc_ids: /mnt/sdc/shpark/colbert/data/index_to_chunk_id_both_topk.json
+hierarchical_level: both # edge, star, both
+collection_root_dir_path: /mnt/sdc/shpark/colbert/data
+index_root: /mnt/sdd/shpark/colbert/data/experiments/default/indexes
+scale: larger # None, larger
+nbits: 2
+selection_method: topk #, topp, thr
+topk: 2
+topp: 0.5
+thr: 0.5

@@ -1,0 +1,6 @@
+bitarray
+datasets
+jupyter
+jupyterlab
+ninja
+python-dotenv

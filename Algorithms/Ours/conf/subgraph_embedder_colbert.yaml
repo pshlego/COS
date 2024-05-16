@@ -1,0 +1,14 @@
+# MongoDB
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017
+
+hierarchical_level: both # edge, star, both
+
+experiment_name: ottqa
+collection_names: ["preprocess_table_graph_cos_apply_topk_edge_5", "preprocess_table_graph_cos_apply_topk_star_5"] # "preprocess_table_graph_author_w_score_2_edge"
+collection_root_dir_path: /mnt/sdc/shpark/colbert/data
+
+nbits: 2
+colbert_checkpoint: /mnt/sdd/shpark/colbert/colbertv2.0

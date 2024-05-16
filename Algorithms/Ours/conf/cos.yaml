@@ -1,0 +1,48 @@
+defaults:
+  - encoder: hf_bert
+# entity linking 결과 저장 위치
+result_path: /root/COS/GraphAnalysis/cos_linking_with_gt_entities.json
+
+table:
+    # Entity linking을 잘 하고 있느냐?를 확인하기 위해
+      # Mention을 gold로 바꿨을 때 잘 되는지 확인
+  # sdd -> sdf로 바꾸고 (DONE)
+  # 나만의 디렉토리
+  embedding_path: /mnt/sdf/shpark/mnt_sdc/shpark/cos/cos/embeds/ott_table_original_0
+  # 저장 위치 바꾸고
+    # 내가 하고 있는 위치
+    # 이걸 gold file로 바꿔야 한다. (DONE)
+      # schema를 맞춰 줘야 한다. 
+  mention_path: /root/COS/GraphAnalysis/gt_dev_entities.json
+
+passage:
+  embedding_path: /mnt/sdf/shpark/mnt_sdc/shpark/cos/cos/embeds/ott_wiki_linker_0
+  mention_path: /mnt/sdd/shpark/graph/for_test/all_passage_chunks_span_prediction.json
+
+
+
+# top k entities to retrieve
+k: 1
+
+# A trained bi-encoder checkpoint file to initialize the model
+model_file: /mnt/sdf/shpark/mnt_sdc/shpark/cos/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+expert_id: 2
+batch_size: 256
+num_shards: 1
+
+# Batch size to generate query embeddings
+do_link: True
+
+# Whether to lower case the input text. Set True for uncased models, False for the cased ones.
+do_lower_case: True
+special_tokens:
+encoder_path:
+
+# local_rank for distributed training on gpus
+device_id: 0
+local_rank: -1
+device:
+distributed_world_size:
+no_cuda: False
+n_gpu:
+fp16: False

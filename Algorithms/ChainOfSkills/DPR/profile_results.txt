@@ -1,0 +1,434 @@
+[2024-01-06 00:50:26,199][root][INFO] - args.local_rank -1
+[2024-01-06 00:50:26,199][root][INFO] - WORLD_SIZE None
+[2024-01-06 00:50:26,200][root][INFO] - Initialized host dslab-gpu18 as d.rank -1 on device=cuda, n_gpu=1, world size=1
+[2024-01-06 00:50:26,200][root][INFO] - 16-bits training: False 
+[2024-01-06 00:50:26,200][root][INFO] - CFG (after gpu  configuration):
+[2024-01-06 00:50:26,231][root][INFO] - encoder:
+  encoder_model_type: hf_cos
+  share_encoder: true
+  pretrained_model_cfg: bert-base-uncased
+  pretrained_file: null
+  projection_dim: 0
+  sequence_length: 512
+  dropout: 0.1
+  fix_ctx_encoder: false
+  use_moe: true
+  num_expert: 6
+  use_infer_expert: false
+  per_layer_gating: false
+  moe_type: mod2:attn
+  pretrained: true
+datasets:
+  nq_test:
+    _target_: dpr.data.retriever_data.CsvQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/nq-test.csv
+  nq_train:
+    _target_: dpr.data.retriever_data.CsvQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/nq-train.csv
+  nq_dev:
+    _target_: dpr.data.retriever_data.CsvQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/nq-dev.csv
+  nq_train_table_answerable:
+    _target_: dpr.data.retriever_data.JsonlQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/nq_table_answerable_train.jsonl
+  nq_dev_table_answerable:
+    _target_: dpr.data.retriever_data.JsonlQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/nq_table_answerable_dev.jsonl
+  webq_test:
+    _target_: dpr.data.retriever_data.CsvQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/webq-test.csv
+  webq_train:
+    _target_: dpr.data.retriever_data.JsonlQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/webq-train.jsonl
+  webq_dev:
+    _target_: dpr.data.retriever_data.JsonlQASrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/retriever/qas/webq-dev.jsonl
+ctx_sources:
+  dpr_wiki:
+    _target_: dpr.data.retriever_data.CsvCtxSrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/wikipedia_split/psgs_w100.tsv
+    id_prefix: 'wiki:'
+  raw_table:
+    _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/tables/all_raw_table_chunks_for_index.json
+  verbalized_table:
+    _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/tables/all_verbalized_table_chunks_for_index.json
+  verbalized_kb:
+    _target_: dpr.data.retriever_data.CsvCtxSrc
+    file: /home/kaixinm/kaixinm/UDT-QA/DPR/data/kb/verbalized_WD_graphs_for_index.tsv
+    id_prefix: 'kelm-v3:'
+  ott_table:
+    _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
+    file: /mnt/sdd/shpark/cos/data/knowledge/ott_table_chunks_original.json
+    id_prefix: 'ott-original:'
+  ott_wiki_passages:
+    _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
+    file: /mnt/sdd/shpark/cos/data/knowledge/ott_wiki_passages.json
+    id_prefix: 'ott-wiki:'
+  wiki_hotpot:
+    _target_: dpr.data.retriever_data.MyJsonlTablesCtxSrc
+    file: /path/to/HotpotQA/hotpot_passage_for_index.json
+    id_prefix: 'hotpot-wiki:'
+indexers:
+  flat:
+    _target_: dpr.indexer.faiss_indexers.DenseFlatIndexer
+  hnsw:
+    _target_: dpr.indexer.faiss_indexers.DenseHNSWFlatIndexer
+  hnsw_sq:
+    _target_: dpr.indexer.faiss_indexers.DenseHNSWSQIndexer
+qa_dataset: /mnt/sdd/shpark/cos/OTT-QA/ott_dev_q_to_tables_with_bm25neg.json
+ctx_datatsets:
+- /mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json
+- /mnt/sdd/shpark/cos/knowledge/ott_wiki_passages.json
+- - /mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages*
+encoded_ctx_files:
+- /mnt/sdd/shpark/cos/embeds/ott_table_original*
+out_file: null
+match: string
+n_docs: 100
+validation_workers: 16
+batch_size: 256
+num_shards: 1
+shard_id: 0
+hop1_limit: 100
+hop1_keep: 200
+hop2_limit: 50
+do_retrieve: false
+do_link: false
+do_span: false
+do_cos: true
+hop2_expert: 4
+mean_pool: false
+do_lower_case: true
+encoder_path: null
+index_path: null
+kilt_out_file: null
+table_chunk_file: null
+label_question: false
+model_file: /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+validate_as_tables: false
+rpc_retriever_cfg_file: null
+indexer: flat
+special_tokens: null
+local_rank: -1
+global_loss_buf_sz: 150000
+device: cuda
+distributed_world_size: 1
+no_cuda: false
+n_gpu: 1
+fp16: false
+fp16_opt_level: O1
+
+[2024-01-06 00:50:26,231][root][INFO] - Reading saved model from /mnt/sdd/shpark/cos/models/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+[2024-01-06 00:50:27,623][root][INFO] - model_state_dict keys dict_keys(['model_dict', 'optimizer_dict', 'scheduler_dict', 'offset', 'epoch', 'encoder_params'])
+the pretrained file is not None and set to None /mnt/checkpoints/taser_pretrain/biencoder_taser_mod2_attn_n4_encoder_blink_contriever_mdr_2xG16_v2_from_contriever_v2/dpr_biencoder.19
+because of loading model file, setting pretrained model cfg to bert bert-base-uncased
+/mnt/sdd/shpark/cos/embeds/ott_table_original*
+/mnt/sdd/shpark/cos/embeds/ott_table_original_0
+number of GPUs: 1
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard1_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard6_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard5_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard8_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard4_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard0_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard3_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard7_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard9_of_10.json
+/mnt/sdd/shpark/cos/provided_by_author_files/OTT_table_to_pasg_links/table_chunks_to_passages_shard2_of_10.json
+839781
+all retrieved 2214
+topk 0.45889792231255644 limit 1
+topk 0.6201445347786811 limit 2
+topk 0.7560975609756098 limit 5
+topk 0.8342366757000903 limit 10
+topk 0.8857271906052394 limit 20
+topk 0.9254742547425474 limit 50
+topk 0.9507678410117435 limit 100
+shard size 2214
+working on start 0 end 2214
+all_passages 5963520
+all_passages 5963520
+the pretrained file is not None and set to None /mnt/checkpoints/taser_pretrain/biencoder_taser_mod2_attn_n4_encoder_blink_contriever_mdr_2xG16_v2_from_contriever_v2/dpr_biencoder.19
+because of loading model file, setting pretrained model cfg to bert bert-base-uncased
+/mnt/sdd/shpark/cos/embeds/ott_wiki_linker*
+/mnt/sdd/shpark/cos/embeds/ott_wiki_linker_0
+number of GPUs: 1
+beam sizes 2263.170731707317 151.3127910430893 2214
+answer recall 1 0.15582655826558264
+answer recall 5 0.6106594399277326
+answer recall 10 0.7046070460704607
+answer recall 20 0.7895212285456188
+answer recall 50 0.8726287262872628
+answer recall 100 0.9146341463414634
+Wrote profile results to run_chain_of_skills_ott.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 31585.9 s
+File: /home/shpark/COS/DPR/run_chain_of_skills_hotpot.py
+Function: rerank_hop1_results at line 268
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   268                                           @profile
+   269                                           def rerank_hop1_results(
+   270                                               encoder: torch.nn.Module,
+   271                                               tensorizer: Tensorizer,
+   272                                               questions: List[str],
+   273                                               bsz: int,
+   274                                               expert_id: None, silence=False
+   275                                           ) -> T:
+   276      2214       1416.0      0.6      0.0      all_scores = []
+   277      2214      55805.0     25.2      0.0      with torch.no_grad():
+   278      2214        617.4      0.3      0.0          if silence:
+   279      2214       2773.8      1.3      0.0              iterator = range(0, len(questions), bsz)
+   280                                                   else:
+   281                                                       iterator = tqdm(range(0, len(questions), bsz))
+   282      9948      71727.0      7.2      0.0          for i in iterator:
+   283      7734      12258.4      1.6      0.0              batch_questions = questions[i : i + bsz]
+   284      7734 4506746665.3 582718.7     14.3              batch_token_tensors = [tensorizer.text_to_tensor(q) for sample in batch_questions for q in sample]
+   285      7734   43810863.2   5664.7      0.1              batch_sep_positions = [(q_tensor == tensorizer.tokenizer.sep_token_id).nonzero()[0][0] for q_tensor in batch_token_tensors]
+   286                                           
+   287      7734    6798621.2    879.1      0.0              q_ids_batch = torch.stack(batch_token_tensors, dim=0).cuda()
+   288      7734     421986.9     54.6      0.0              q_seg_batch = torch.zeros_like(q_ids_batch).cuda()
+   289      7734     435702.5     56.3      0.0              q_attn_mask = tensorizer.get_attn_mask(q_ids_batch)
+   290                                           
+   291      7734   89620821.2  11587.9      0.3              outputs = encoder(input_ids=q_ids_batch, token_type_ids=q_seg_batch, attention_mask=q_attn_mask, expert_id=expert_id)
+   292      7734      21699.1      2.8      0.0              ctx_sep_rep = []
+   293   1710492     389860.4      0.2      0.0              for i in range(len(batch_sep_positions)):
+   294   1702758   12859315.9      7.6      0.0                  ctx_sep_rep.append(outputs[0][i][batch_sep_positions[i]])
+   295      7734    1757948.1    227.3      0.0              ctx_sep_rep = torch.stack(ctx_sep_rep, dim=0)
+   296      7734        3e+10    3e+06     85.2              rerank_scores = (ctx_sep_rep * outputs[1]).sum(dim=-1).tolist()
+   297      7734      13031.6      1.7      0.0              curr = 0
+   298     15468      31866.5      2.1      0.0              for sample in batch_questions:
+   299      7734      68321.2      8.8      0.0                  all_scores.append(rerank_scores[curr:curr+len(sample)])
+   300      7734       5585.4      0.7      0.0                  curr += len(sample)
+   301      2214        504.8      0.2      0.0      return all_scores
+
+Total time: 69.1892 s
+File: /home/shpark/COS/DPR/run_chain_of_skills_ott.py
+Function: q_to_tables at line 241
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   241                                           @profile
+   242                                           def q_to_tables(cfg: DictConfig, encoder, tensorizer, gpu_index_flat, doc_ids):
+   243         1          1.2      1.2      0.0      expert_id = None
+   244         1        185.4    185.4      0.0      if cfg.encoder.use_moe:
+   245         1        273.0    273.0      0.0          logger.info("Setting expert_id=0")
+   246         1          0.2      0.2      0.0          expert_id = 0
+   247         1        111.4    111.4      0.0          logger.info(f"mean pool {cfg.mean_pool}")
+   248                                           
+   249                                               # '/home/kaixinm/kaixinm/Git_repos/OTT-QA/intermediate_data/dev_q_to_tables_with_bm25neg.json'
+   250         1    1107158.7    1e+06      1.6      data = build_query(cfg.qa_dataset)
+   251         2   39251324.3    2e+07     56.7      questions_tensor = generate_question_vectors(encoder, tensorizer,
+   252         1       3164.8   3164.8      0.0          [s['question'] for s in data], cfg.batch_size, expert_id=expert_id, mean_pool=cfg.mean_pool
+   253                                               )
+   254         1         17.2     17.2      0.0      assert questions_tensor.shape[0] == len(data)
+   255                                           
+   256         1          0.8      0.8      0.0      k = 100                         
+   257                                               #b_size = 2048
+   258         1          0.5      0.5      0.0      b_size = 1
+   259         1          2.6      2.6      0.0      all_retrieved = []
+   260      2215      70465.6     31.8      0.1      for i in tqdm(range(0, len(questions_tensor), b_size)):
+   261      2214   28284019.2  12775.1     40.9          D, I = gpu_index_flat.search(questions_tensor[i:i+b_size].cpu().numpy(), k)  # actual search
+   262      4428       7370.7      1.7      0.0          for j, ind in enumerate(I):
+   263      2214     251240.4    113.5      0.4              retrieved_chunks = [doc_ids[idx].replace('ott-original:_', '').strip() if 'ott-original:' in doc_ids[idx] else doc_ids[idx].replace('ott-wiki:_', '').strip() for idx in ind]
+   264      2214      13510.5      6.1      0.0              retrieved_scores = D[j].tolist()
+   265      2214       1622.0      0.7      0.0              all_retrieved.append((retrieved_chunks, retrieved_scores))
+   266         1          9.5      9.5      0.0      print ('all retrieved', len(all_retrieved))
+   267                                           
+   268         1          1.0      1.0      0.0      limits = [1, 2, 5, 10, 20, 50, 100]
+   269         1          0.8      0.8      0.0      topk = [0]*len(limits)
+   270                                           
+   271      2215       1541.7      0.7      0.0      for i, sample in enumerate(data):
+   272      2214       1528.3      0.7      0.0          if 'positive_ctxs' in sample:
+   273      2214       4948.2      2.2      0.0              gold = [pos['chunk_id'] for pos in sample['positive_ctxs']]
+   274      2214     162379.0     73.3      0.2              sample['results'] = [{'title': ctx, 'score': all_retrieved[i][1][_], 'gold': ctx in gold} for _, ctx in enumerate(all_retrieved[i][0])]
+   275     17712       5026.4      0.3      0.0              for j, limit in enumerate(limits):
+   276     15498       6316.3      0.4      0.0                  retrieved = all_retrieved[i][0][:limit]
+   277     15498      13376.5      0.9      0.0                  if any([g in retrieved for g in gold]):
+   278     12025       3595.7      0.3      0.0                      topk[j] += 1
+   279                                                   else:
+   280                                                       sample['results'] = [{'title': ctx, 'score': all_retrieved[i][1][_]} for _, ctx in enumerate(all_retrieved[i][0])]
+   281         8          3.2      0.4      0.0      for i, limit in enumerate(limits):
+   282         7         33.1      4.7      0.0          print ('topk', topk[i]/len(data), 'limit', limit)
+   283         1          0.2      0.2      0.0      return data
+
+Total time: 102.693 s
+File: /home/shpark/COS/DPR/run_chain_of_skills_ott.py
+Function: process_ott_beams_new at line 362
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   362                                           @profile
+   363                                           def process_ott_beams_new(beams, original_sample, all_table_chunks, all_passages, tokenizer, limit):
+   364      2214       2461.1      1.1      0.0      exist = {}
+   365      2214       1448.3      0.7      0.0      all_included = []
+   366    308465      72617.6      0.2      0.1      for beam in beams:
+   367    308465      98367.9      0.3      0.1          table_id = beam['chunk_id']
+   368    308465      78286.2      0.3      0.1          if table_id not in exist:
+   369     23234       8824.6      0.4      0.0              exist[table_id] = 1
+   370     23234      55912.3      2.4      0.1              content = all_table_chunks[table_id]
+   371     23234      31410.9      1.4      0.0              content_text = content['text']
+   372     23234      10815.1      0.5      0.0              content_title = content['title']
+   373     23234      10455.2      0.4      0.0              if 'answers' in original_sample:
+   374     23234    8470912.7    364.6      8.2                  ctx_has_answer = has_answer(original_sample['answers'], content_text, tokenizer, 'string')
+   375                                                       else:
+   376                                                           ctx_has_answer = False
+   377     23234      27872.7      1.2      0.0              all_included.append({'id':table_id, 'title': content_title, 'text': content_text, 'has_answer': ctx_has_answer, 'hop1 score': beam['hop1 score'], 'chunk_is_gold': beam['chunk_is_gold'], 'row_idx': beam['row_idx'], 'row_is_gold': beam['row_is_gold'], 'row_rank_score': beam['row_rank_score']})
+   378     23234       8011.3      0.3      0.0              if len(all_included) == limit:
+   379       172         76.3      0.4      0.0                  break
+   380    308293      79498.3      0.3      0.1          if 'pasg_title' in beam:
+   381    308293     115062.0      0.4      0.1              if beam['pasg_title'] in exist:
+   382    110127      16812.4      0.2      0.0                  continue
+   383    198166      66199.0      0.3      0.1              exist[beam['pasg_title']] = 1
+   384    198166    1152867.2      5.8      1.1              text = all_passages[beam['pasg_title']][0]
+   385                                                       #grounded_cell = beam[3]
+   386                                                       #table_part = beam['q'].split('[SEP]')[1].strip()
+   387    198166      66303.3      0.3      0.1              content = all_table_chunks[table_id]
+   388    198166      57568.4      0.3      0.1              content_text = content['text']
+   389    198166      52093.9      0.3      0.1              content_title = content['title']
+   390    198166     284771.8      1.4      0.3              rows = content['text'].split('\n')[1:]
+   391    198166     223239.9      1.1      0.2              header = content['text'].split('\n')[0]
+   392    198166     293530.7      1.5      0.3              full_text = header + '\n' + rows[beam['row_idx']] + '\n' + beam['pasg_title'] + ' ' + text
+   393    198166      61739.8      0.3      0.1              if 'answers' in original_sample:
+   394    198166   91010192.1    459.3     88.6                  pasg_has_answer = has_answer(original_sample['answers'], full_text, tokenizer, 'string')
+   395                                                       else:
+   396                                                           pasg_has_answer = False
+   397    198166     274906.4      1.4      0.3              all_included.append({'id':table_id, 'title': content_title, 'text': full_text, 'has_answer': pasg_has_answer, 'hop1 score': beam['hop1 score'], 'chunk_is_gold': beam['chunk_is_gold'], 'row_idx': beam['row_idx'], 'row_is_gold': beam['row_is_gold'], 'row_rank_score': beam['row_rank_score'], 'grounding': beam['grounding'] if 'grounding' in beam else None, 'hop2 score': beam['hop2 score'], 'hop2 source': beam['hop2 source'], 'path score': beam['path score']})
+   398    198166      59115.8      0.3      0.1              if len(all_included) == limit:
+   399      2042        904.6      0.4      0.0                  break
+   400                                                       #else:
+   401                                                       #    failed += 1
+   402      2214        516.6      0.2      0.0      return all_included
+
+Total time: 41027.9 s
+File: /home/shpark/COS/DPR/run_chain_of_skills_ott.py
+Function: chain_of_skills at line 403
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   403                                           @profile
+   404                                           def chain_of_skills(cfg: DictConfig):
+   405         1   21518971.6    2e+07      0.1      encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg, sequence_length=512)
+   406         1        269.0    269.0      0.0      if 'train' in cfg.qa_dataset:
+   407                                                   split = 'train'
+   408         1         28.1     28.1      0.0      elif 'dev' in cfg.qa_dataset:
+   409         1          0.3      0.3      0.0          split = 'dev'
+   410                                               elif 'test' in cfg.qa_dataset:
+   411                                                   split = 'test'
+   412                                               else:
+   413                                                   print ('split not found')
+   414                                                   exit(0)
+   415         1  172239611.2    2e+08      0.4      all_links = load_links(cfg.ctx_datatsets[2])
+   416                                               #100개의 table chunk 검색
+   417         1   69222369.4    7e+07      0.2      data = q_to_tables(cfg, encoder, tensorizer, gpu_index_flat, doc_ids)
+   418         1        243.2    243.2      0.0      shard_size = int(len(data)/int(cfg.num_shards))
+   419         1          4.5      4.5      0.0      print ('shard size', shard_size)
+   420         1         52.3     52.3      0.0      if int(cfg.shard_id) != int(cfg.num_shards)-1:
+   421                                                   start = int(cfg.shard_id)*shard_size
+   422                                                   end = (int(cfg.shard_id)+1)*shard_size
+   423                                               else:
+   424         1         22.7     22.7      0.0          start = int(cfg.shard_id)*shard_size
+   425         1          0.4      0.4      0.0          end = len(data)
+   426         1          2.1      2.1      0.0      print ('working on start', start, 'end', end)
+   427         1         91.1     91.1      0.0      data = data[start:end]
+   428         1    2938142.2    3e+06      0.0      table_chunks = json.load(open(cfg.ctx_datatsets[0], 'r'))
+   429         1          1.0      1.0      0.0      all_table_chunks = {}
+   430    840896     245496.4      0.3      0.0      for chunk in table_chunks:
+   431    840895     553278.8      0.7      0.0          all_table_chunks[chunk['chunk_id']] = chunk
+   432         1   24276742.1    2e+07      0.1      pasg_d = load_ott_passage_with_id(cfg.ctx_datatsets[1])
+   433                                               
+   434         1          2.3      2.3      0.0      beam_sizes = []
+   435         1          4.2      4.2      0.0      limits = [1, 5, 10, 20, 50, 100]
+   436                                           
+   437         1         11.7     11.7      0.0      answer_recall = [0]*len(limits)
+   438         1       1703.7   1703.7      0.0      tokenizer = SimpleTokenizer()
+   439         1        518.0    518.0      0.0      cfg.encoded_ctx_files[0] = cfg.encoded_ctx_files[0].replace('ott_table_original', 'ott_wiki_linker')
+   440                                               # reload the index
+   441         1   63603489.0    6e+07      0.2      encoder, tensorizer, gpu_index_flat, doc_ids = set_up_encoder(cfg, sequence_length=512)  
+   442         1       2695.0   2695.0      0.0      logger.info(f"Setting expert_id={cfg.hop2_expert}")
+   443         1        103.1    103.1      0.0      expert_id = cfg.hop2_expert
+   444      2215     618910.0    279.4      0.0      for si, sample in enumerate(tqdm(data)):
+   445      2214     297862.9    134.5      0.0          step1_results = sample['results'][:cfg.hop1_limit]
+   446      2214       4241.3      1.9      0.0          pos_d = {}
+   447      2214       1169.3      0.5      0.0          if 'positive_ctxs' in sample:
+   448      4970       5763.0      1.2      0.0              for pos in sample['positive_ctxs']:
+   449      2756      14453.1      5.2      0.0                  pos_d[pos['chunk_id']] = [ans[1][0] for ans in pos['answer_node']]
+   450      2214       4518.4      2.0      0.0          question = sample['question']
+   451      2214      87177.8     39.4      0.0          row_beams = []
+   452      2214    1497475.6    676.4      0.0          link_d = defaultdict(list)
+   453    223614      70381.5      0.3      0.0          for ci, ctx in enumerate(step1_results):
+   454    221400    1057728.1      4.8      0.0              table_chunk = all_table_chunks[ctx['title']]
+   455                                                       #row 단위로 decompose한다.
+   456    221400     725274.9      3.3      0.0              table_rows = table_chunk['text'].split('\n')
+   457    221400      70883.8      0.3      0.0              if 'gold' in ctx:
+   458    221400    2467325.2     11.1      0.0                  table_rows_docs = [{'q':question + ' [SEP] ' + table_chunk['title'] + ' ' + table_rows[0]+'\n'+row, 'chunk_id': ctx['title'], 'row_idx': ri, 'hop1 score': ctx['score'], 'chunk_is_gold': ctx['gold'], 'row_is_gold': ctx['gold'] and ri in pos_d[ctx['title']]} for ri, row in enumerate(table_rows[1:]) if row.strip()]
+   459                                                       else:
+   460                                                           table_rows_docs = [{'q':question + ' [SEP] ' + table_chunk['title'] + ' ' + table_rows[0]+'\n'+row, 'chunk_id': ctx['title'], 'row_idx': ri, 'hop1 score': ctx['score'], 'chunk_is_gold': False, 'row_is_gold': False} for ri, row in enumerate(table_rows[1:]) if row.strip()]
+   461    221400      86796.1      0.4      0.0              row_beams.extend(table_rows_docs)
+   462    221400      47629.1      0.2      0.0              try:
+   463    221400     888486.5      4.0      0.0                  linked_passages = all_links[ctx['title']]
+   464        39         10.4      0.3      0.0              except:
+   465        39         20.0      0.5      0.0                  linked_passages = []
+   466    221400      82137.1      0.4      0.0              if len(linked_passages) > 0:
+   467   4434782    1847492.2      0.4      0.0                  for _, link in enumerate(linked_passages):
+   468   4213422    6220985.7      1.5      0.0                      link_d[(ctx['title'], link[1][4])].append({'pasg_title': link[0], 'grounding': link[1][2], 'link score': link[1][0]})
+   469                                                   # row 단위로 reranking한다.
+   470      2214        3e+10    1e+07     77.0          scores = rerank_hop1_results(encoder, tensorizer, [[b['q'] for b in row_beams[_:_+cfg.batch_size]] for _ in range(0, len(row_beams), cfg.batch_size)], 1, expert_id=4, silence=True)
+   471      2214     534929.5    241.6      0.0          scores = [x for sub in scores for x in sub]
+   472   1704972     457456.6      0.3      0.0          for i in range(len(row_beams)):
+   473   1702758    1065781.7      0.6      0.0              row_beams[i]['row_rank_score'] = scores[i]
+   474      2214     718518.8    324.5      0.0          row_beams = sorted(row_beams, key=lambda x: x['row_rank_score']*2+x['hop1 score'], reverse=True)
+   475      2214     673683.8    304.3      0.0          row_beams = row_beams[:cfg.hop1_keep]
+   476                                                   # vector를 확장한다. (row 단위로)
+   477      2214 8237352684.8    4e+06     20.1          q_vecs = generate_question_vectors(encoder, tensorizer, [b['q'] for b in row_beams], cfg.batch_size, expert_id=expert_id, silence=True)
+   478                                                   # 확장된 vector로 10개의 관련 passage를 검색한다.
+   479      2214  656001896.0 296297.2      1.6          D, I = gpu_index_flat.search(q_vecs.numpy(), 10)  # actual search
+   480                                                   
+   481      2214    7300778.5   3297.6      0.0          final_beams = []
+   482    445014     195893.4      0.4      0.0          for ri, row in enumerate(row_beams):
+   483    442800    6060606.5     13.7      0.0              retrieved_titles = [doc_ids[idx].replace('ott-wiki:_', '').strip() for idx in I[ri]]
+   484    442800     427567.4      1.0      0.0              retrieved_scores = D[ri].tolist()
+   485    442800     480019.2      1.1      0.0              if (row['chunk_id'], row['row_idx']) in link_d:
+   486    429126    1340910.1      3.1      0.0                  max_link_score = max([l['link score'] for l in link_d[(row['chunk_id'], row['row_idx'])]])
+   487    429126     251170.9      0.6      0.0                  max_r2_score = max(retrieved_scores)
+   488    429126     195428.0      0.5      0.0                  max_link_score = max(max_link_score, max_r2_score)
+   489   1569652     576027.7      0.4      0.0                  for linked_p in link_d[(row['chunk_id'], row['row_idx'])]:
+   490   1140526     737771.3      0.6      0.0                      if linked_p['pasg_title'] in retrieved_titles:
+   491    557866     241678.7      0.4      0.0                          idx = retrieved_titles.index(linked_p['pasg_title'])
+   492                                                                   # 검색된 page와 동일한 page가 linking되었을 때, score를 조정한다.
+   493    557866     434978.6      0.8      0.0                          retrieved_scores[idx] = max(retrieved_scores[idx], linked_p['link score']*max_r2_score/max_link_score)*1.1
+   494                                                               else:
+   495    582660    1119153.8      1.9      0.0                          new_row = {k:v for k,v in row.items()}
+   496    582660     201493.2      0.3      0.0                          new_row['pasg_title'] = linked_p['pasg_title']
+   497    582660     268502.9      0.5      0.0                          new_row['grounding'] = linked_p['grounding']
+   498    582660     235728.3      0.4      0.0                          new_row['hop2 score'] = linked_p['link score']*max_r2_score/max_link_score
+   499    582660     373388.5      0.6      0.0                          new_row['hop2 source'] = 'pl'
+   500    582660     284784.1      0.5      0.0                          new_row['path score'] = new_row['hop1 score']+new_row['row_rank_score']*2+new_row['hop2 score']
+   501    582660     231444.0      0.4      0.0                          final_beams.append(new_row)
+   502   4870800    2066680.8      0.4      0.0              for _, (tt, score) in enumerate(zip(retrieved_titles, retrieved_scores)):
+   503   4428000    8307308.0      1.9      0.0                  new_row = {k:v for k,v in row.items()}
+   504   4428000    1453565.4      0.3      0.0                  new_row['pasg_title'] = tt
+   505   4428000    1400345.1      0.3      0.0                  new_row['hop2 score'] = score
+   506   4428000    1466203.0      0.3      0.0                  new_row['hop2 source'] = 'r2'
+   507   4428000    3803973.7      0.9      0.0                  new_row['path score'] = new_row['hop1 score']+new_row['row_rank_score']*2+new_row['hop2 score']
+   508   4428000    1713716.7      0.4      0.0                  final_beams.append(new_row)
+   509                                           
+   510      2214    2040045.8    921.4      0.0          final_beams = sorted(final_beams, key=lambda x: x['path score'], reverse=True)
+   511      2214       8652.2      3.9      0.0          beam_sizes.append(len(final_beams))
+   512      2214  103962072.3  46956.7      0.3          all_included = process_ott_beams_new(final_beams, sample, all_table_chunks, pasg_d, tokenizer, 100)
+   513      2214       9149.3      4.1      0.0          del sample['results']
+   514      2214       1388.9      0.6      0.0          sample['ctxs'] = all_included
+   515     15498       9258.8      0.6      0.0          for l, limit in enumerate(limits):
+   516     13284      74757.3      5.6      0.0              if any([ctx['has_answer'] for ctx in all_included[:limit]]):
+   517      8962       5763.2      0.6      0.0                  answer_recall[l] += 1
+   518         1       2231.5   2231.5      0.0      print ('beam sizes', np.mean(beam_sizes), np.std(beam_sizes), len(beam_sizes))
+   519         7          4.2      0.6      0.0      for l, limit in enumerate(limits):
+   520         6         21.3      3.6      0.0          print ('answer recall', limit, answer_recall[l]/len(beam_sizes))
+   521                                                   
+   522         1      30218.8  30218.8      0.0      with open('/'.join(cfg.model_file.split('/')[:-1]) + f'/ott_{split}_core_reader_hop1keep{cfg.hop1_keep}_shard{cfg.shard_id}_of_{cfg.num_shards}.json', 'w') as f:
+   523         1   23303658.8    2e+07      0.1          json.dump(data, f, indent=4)
+

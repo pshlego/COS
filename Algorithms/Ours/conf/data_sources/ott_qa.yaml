@@ -1,0 +1,6 @@
+table:
+  collection_name: ott_table
+  path: /mnt/sdd/shpark/cos/knowledge/ott_table_chunks_original.json
+passage:
+  collection_name: ott_wiki_passages
+  path: /mnt/sdd/shpark/cos/knowledge/ott_wiki_passages.json

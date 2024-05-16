@@ -1,0 +1,48 @@
+defaults:
+  - encoder: hf_bert
+
+result_path: /mnt/sdd/shpark/graph/entity_linking_results/table_chunks_to_passages_mvd.json
+
+view_generator:
+  max_global_view_len: 512
+  max_local_view_len: 40
+  table:
+    view_path: /mnt/sdd/shpark/graph/view/ott_table_view.json
+  passage:
+    view_path: /mnt/sdd/shpark/graph/view/ott_passage_view.json
+
+index_builder:
+  entity_embedding_path: /mnt/sdd/shpark/graph/embeds/entity_embedding_data_obj.pb
+  entity_embedding_idx_path: /mnt/sdd/shpark/graph/embeds/entity_embedding_idx_data_obj.pb
+  data_type_idx_path: /mnt/sdd/shpark/graph/index/data_type_idx.json
+  view2entity_path: /mnt/sdd/shpark/graph/index/view2entity.json
+
+  # Model path
+  bert_model: bert-base-uncased
+  pretrain_retriever: /mnt/sdd/shpark/mvd/model/MVD_Training/mvd.bin
+  pretrain_teacher:
+  task_name: retriever
+
+  # Index Configuration
+  local_batch_size: 4096
+  global_batch_size: 1024
+  is_gpu: True
+
+# Run on gpus
+no_cuda: False
+batch_size: 512
+top_k: 5
+threshold: 0.95
+max_seq_length: 128
+
+# Output path
+table_mention_queries_path: /mnt/sdd/shpark/graph/table_mention_queries.pkl
+passage_mention_queries_path: /mnt/sdd/shpark/graph/passage_mention_queries.pkl
+
+# MongoDB
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017
+
+do_view_generation: False
