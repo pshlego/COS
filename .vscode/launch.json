@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "prototype_of_graph_query_algorithm",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/Ours/graph_query_algorithm.py",
+            "console": "integratedTerminal",
+            "python":"/home/shpark/anaconda3/envs/hf4/bin/python",
+            "args":[],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1",
+                "PYTHONPATH": "/home/shpark/OTT_QA_Workspace/Algorithms/ColBERT:/home/shpark/OTT_QA_Workspace/Algorithms"
+            },
+            "justMyCode": true,
+        },
+    ]
+}

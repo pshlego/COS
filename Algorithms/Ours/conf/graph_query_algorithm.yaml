@@ -1,0 +1,47 @@
+# mongodb
+dbname: mydatabase
+username: root
+password: 1234
+port: 27017
+
+
+# input
+qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
+two_node_graph_name: preprocess_table_graph_cos_apply_topk_edge_1
+table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
+passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
+
+
+# output
+integrated_graph_save_path: /mnt/sdd/shpark/output/integrated_graph_passage_augmented_only_20_1_v5.json
+
+
+# retriever
+## id to chunk id
+two_node_graph_ids_path: /mnt/sde/shpark/colbert/data/index_to_chunk_id_edge_topk_1.json
+table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/table_cos_version/index_to_chunk_id.json
+passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
+
+## colbert config
+collection_two_node_graph_root_dir_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/table
+collection_table_root_dir_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage
+collection_passage_root_dir_path: /mnt/sde/shpark/colbert/data
+
+two_node_graph_index_name: ottqa_edge_512_topk_1_sampled_0_0_0_5_trained
+table_index_name: ottqa_passage_to_table_segment_0_3_sampled_96_cos_version
+passage_index_name: ottqa_table_segment_to_passage_0_5_sampled_96_cos_version
+
+two_node_graph_index_root_path: /mnt/sdf/shpark/experiments/default/indexes
+table_index_root_path: /mnt/sdd/shpark/colbert/experiments/default/indexes
+passage_index_root_path: /mnt/sdd/shpark/colbert/experiments/default/indexes
+
+nbits: 2
+
+
+# experimental setting
+top_k_of_two_node_graph: 10000
+top_k_of_table_augmentation: 20
+top_k_of_passage_augmentation: 0
+top_k_of_table: 1
+top_k_of_passage: 1
+node_scoring_method: max # 'min' or 'max' or 'mean'

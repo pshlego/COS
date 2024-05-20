@@ -107,7 +107,7 @@ def check_answer(questions_answers_docs, tokenizer, match_type) -> List[bool]:
     return hits
 
 
-def has_answer(answers, text, tokenizer, match_type) -> bool:
+def has_answer(answers, text, tokenizer, match_type, max_length = -1) -> bool:
     """Check if a document contains an answer string.
     If `match_type` is string, token matching is done between the text and answer.
     If `match_type` is regex, we search the whole text with the regex.
@@ -116,7 +116,7 @@ def has_answer(answers, text, tokenizer, match_type) -> bool:
 
     if match_type == "string":
         # Answer is a list of possible strings
-        text = tokenizer.tokenize(text).words(uncased=True)
+        text = tokenizer.tokenize(text).words(uncased=True)[:max_length]
 
         for single_answer in answers:
             single_answer = _normalize(single_answer)
