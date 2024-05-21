@@ -39,7 +39,7 @@ nbits: 2
 
 
 # experimental setting
-top_k_of_two_node_graph: 10000
+top_k_of_two_node_graph: 500
 top_k_of_table_augmentation: 20
 top_k_of_passage_augmentation: 0
 top_k_of_table: 1

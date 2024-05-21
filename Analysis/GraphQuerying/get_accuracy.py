@@ -46,8 +46,8 @@ if __name__ == "__main__":
                     context += table['text']
                     all_included.append(table['text'])
                 
-                node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes'] if x[2] != 'passage_node_augmentation']
-                #node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes']]
+                #node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes'] if x[2] != 'passage_node_augmentation']
+                node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes']]
                 max_linked_node_id, max_score = max(node_info['linked_passage_nodes'], key=lambda x: x[1], default=(None, 0))
                 if isinstance(max_linked_node_id, int):
                     max_linked_node_id = id_to_passage_key[str(max_linked_node_id)].replace('/wiki/', '').replace('_', ' ')
@@ -77,7 +77,8 @@ if __name__ == "__main__":
                     continue
                 passage_text = passage_content['title'] + ' ' + passage_content['text']
                 
-                node_info['linked_table_segment_nodes'] = [(x[0], x[1]) for x in node_info['linked_table_segment_nodes'] if x[2] != 'passage_node_augmentation']
+                #node_info['linked_table_segment_nodes'] = [(x[0], x[1]) for x in node_info['linked_table_segment_nodes'] if x[2] != 'passage_node_augmentation']
+                node_info['linked_table_segment_nodes'] = [(x[0], x[1]) for x in node_info['linked_table_segment_nodes']]
                 
                 if len(node_info['linked_table_segment_nodes']) == 0:
                     continue
