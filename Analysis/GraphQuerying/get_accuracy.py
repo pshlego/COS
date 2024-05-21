@@ -24,7 +24,7 @@ if __name__ == "__main__":
     recall_list = []
 
     tokenizer = SimpleTokenizer()
-    
+    error_cases = {}
     for retrieved_graph, qa_datum in tqdm(zip(retrieved_graphs, qa_dataset), total=len(qa_dataset)):
         answers = qa_datum['answers']
         context = ""
@@ -46,8 +46,8 @@ if __name__ == "__main__":
                     context += table['text']
                     all_included.append(table['text'])
                 
-                #node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes'] if x[2] != 'passage_node_augmentation']
-                node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes']]
+                node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes'] if x[2] != 'passage_node_augmentation']
+                #node_info['linked_passage_nodes'] = [(x[0], x[1]) for x in node_info['linked_passage_nodes']]
                 max_linked_node_id, max_score = max(node_info['linked_passage_nodes'], key=lambda x: x[1], default=(None, 0))
                 if isinstance(max_linked_node_id, int):
                     max_linked_node_id = id_to_passage_key[str(max_linked_node_id)].replace('/wiki/', '').replace('_', ' ')
@@ -105,7 +105,11 @@ if __name__ == "__main__":
             recall_list.append(1)
         else:
             recall_list.append(0)
+            qa_datum['retrieved_graph'] = retrieved_graph
+            error_cases[qa_datum['id']] = qa_datum
 
     print(f"recall: {sum(recall_list) / len(recall_list)}")
-            
+
+    with open("/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json", 'w') as f:
+        json.dump(error_cases, f, indent=4)
         

@@ -1,5 +1,6 @@
-import hydra
 import json
+import time
+import hydra
 from tqdm import tqdm
 from pymongo import MongoClient
 from omegaconf import DictConfig
@@ -102,7 +103,7 @@ class GraphQueryEngine:
         for graphidx, retrieved_id in enumerate(retrieved_two_node_graph_id_list[:self.top_k_of_two_node_graph]):
             retrieved_two_node_graph_content = self.two_node_graph_key_to_content[self.id_to_two_node_graph_key[str(retrieved_id)]]
 
-            ## pass single node graph
+            # pass single node graph
             if 'linked_entity_id' not in retrieved_two_node_graph_content:
                 continue
             
@@ -114,26 +115,26 @@ class GraphQueryEngine:
     def integrate_graphs(self, retrieved_graphs):
         integrated_graph = {}
         retrieval_type='two_node_graph_retrieval'
-        ### graph integration
+        # graph integration
         for retrieved_graph_content in retrieved_graphs:
             graph_chunk_id = retrieved_graph_content['chunk_id']
 
-            ### get table segment node info
+            # get table segment node info
             table_key = str(retrieved_graph_content['table_id'])
             row_id = graph_chunk_id.split('_')[1]
             table_segment_node_id = f"{table_key}_{row_id}"
             
-            ### get passage node info
+            # get passage node info
             passage_id = retrieved_graph_content['linked_entity_id']
             
-            ### get two node graph score
+            # get two node graph score
             two_node_graph_score = retrieved_graph_content['two_node_graph_score']
             
-            ### add nodes
+            # add nodes
             self.add_node(integrated_graph, 'table segment', table_segment_node_id, passage_id, two_node_graph_score, retrieval_type)
             self.add_node(integrated_graph, 'passage', passage_id, table_segment_node_id, two_node_graph_score, retrieval_type)
 
-            ### node scoring
+            # node scoring
             self.assign_scores(integrated_graph)
 
         return integrated_graph
@@ -277,12 +278,18 @@ def main(cfg: DictConfig):
     
     # query
     print(f"Start querying...")
-    retrieved_query_list = []
     recall_list = []
+    error_cases = []
+    query_time_list = []
+    retrieved_query_list = []
     for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
         nl_question = qa_datum['question']
         answers = qa_datum['answers']
+        
+        init_time = time.time()
         retrieved_graph = graph_query_engine.query(nl_question)
+        end_time = time.time()
+        query_time_list.append(end_time - init_time)
         
         context = get_context(retrieved_graph, graph_query_engine)
         is_has_answer = has_answer(answers, context, tokenizer, 'string', max_length=4096)
@@ -290,15 +297,19 @@ def main(cfg: DictConfig):
         if is_has_answer:
             recall_list.append(1)
         else:
+            qa_datum['retrieved_graph'] = retrieved_graph
+            error_cases.append(qa_datum)
             recall_list.append(0)
         
         retrieved_query_list.append(retrieved_graph)
 
     print(f"HITS4K: {sum(recall_list) / len(recall_list)}")
+    print(f"Average query time: {sum(query_time_list) / len(query_time_list)}")
     
-    ## save integrated graph
+    # save integrated graph
     print(f"Saving integrated graph...")
     json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
-        
+    json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
+    json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
 if __name__ == "__main__":
     main()

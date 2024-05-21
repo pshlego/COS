@@ -13,8 +13,9 @@ passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 
 
 # output
-integrated_graph_save_path: /mnt/sdd/shpark/output/integrated_graph_passage_augmented_only_20_1_v5.json
-
+integrated_graph_save_path: /mnt/sdd/shpark/output/integrated_graph_passage_augmented_only_20_1_v6.json
+query_time_save_path: /mnt/sdd/shpark/output/integrated_graph_passage_augmented_only_20_1_v6_time.json
+error_cases_save_path: /home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases_20_1_v6.json
 
 # retriever
 ## id to chunk id
@@ -40,8 +41,8 @@ nbits: 2
 
 # experimental setting
 top_k_of_two_node_graph: 500
-top_k_of_table_augmentation: 20
-top_k_of_passage_augmentation: 0
+top_k_of_table_augmentation: 5
+top_k_of_passage_augmentation: 5
 top_k_of_table: 1
 top_k_of_passage: 1
 node_scoring_method: max # 'min' or 'max' or 'mean'
