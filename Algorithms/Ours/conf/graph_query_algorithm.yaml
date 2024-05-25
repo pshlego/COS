@@ -13,9 +13,9 @@ passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 
 
 # output
-integrated_graph_save_path: /mnt/sdd/shpark/output/integrated_graph_passage_augmented_only_20_1_v6.json
-query_time_save_path: /mnt/sdd/shpark/output/integrated_graph_passage_augmented_only_20_1_v6_time.json
-error_cases_save_path: /home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases_20_1_v6.json
+integrated_graph_save_path: /mnt/sdd/shpark/output/integrated_graph_augmented_both_50_2_v13.json
+query_time_save_path: /mnt/sdd/shpark/output/integrated_graph_augmented_both_50_2_v13_time.json
+error_cases_save_path: /home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases_50_2_v13.json
 
 # retriever
 ## id to chunk id
@@ -30,7 +30,7 @@ collection_passage_root_dir_path: /mnt/sde/shpark/colbert/data
 
 two_node_graph_index_name: ottqa_edge_512_topk_1_sampled_0_0_0_5_trained
 table_index_name: ottqa_passage_to_table_segment_0_3_sampled_96_cos_version
-passage_index_name: ottqa_table_segment_to_passage_0_5_sampled_96_cos_version
+passage_index_name: ottqa_table_segment_to_passage_0_5_sampled_96_cos_version #ottqa_table_segment_to_passage_0_5_sampled_96_cos_version
 
 two_node_graph_index_root_path: /mnt/sdf/shpark/experiments/default/indexes
 table_index_root_path: /mnt/sdd/shpark/colbert/experiments/default/indexes
@@ -41,8 +41,8 @@ nbits: 2
 
 # experimental setting
 top_k_of_two_node_graph: 500
-top_k_of_table_augmentation: 5
-top_k_of_passage_augmentation: 5
-top_k_of_table: 1
-top_k_of_passage: 1
+top_k_of_table_augmentation: 50
+top_k_of_passage_augmentation: 50
+top_k_of_table: 2
+top_k_of_passage: 2
 node_scoring_method: max # 'min' or 'max' or 'mean'

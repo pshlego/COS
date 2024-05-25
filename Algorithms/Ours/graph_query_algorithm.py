@@ -140,18 +140,19 @@ class GraphQueryEngine:
         return integrated_graph
 
     def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type):
-        for query_node_id, query_node_score in topk_query_nodes:
+        for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
             expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
             
             if query_node_type == 'table segment':
-                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, self.top_k_of_passage)
+                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 100)
+                retrieved_id_list = retrieved_node_info[0][:self.top_k_of_passage]
+                retrieved_score_list = retrieved_node_info[2][:self.top_k_of_passage]
             else:
-                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, self.top_k_of_passage)
+                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 100)
+                retrieved_id_list = retrieved_node_info[0][:self.top_k_of_table]
+                retrieved_score_list = retrieved_node_info[2][:self.top_k_of_table]
             
-            retrieved_id_list = retrieved_node_info[0]
-            retrieved_score_list = retrieved_node_info[2]
-            
-            for pid, retrieved_id in enumerate(retrieved_id_list):
+            for target_rank, retrieved_id in enumerate(retrieved_id_list):
                 if query_node_type == 'table segment':
                     retrieved_node_id = self.id_to_passage_key[str(retrieved_id)]
                     retrieval_type = 'passage_node_augmentation'
@@ -159,8 +160,8 @@ class GraphQueryEngine:
                     retrieved_node_id = self.id_to_table_key[str(retrieved_id)]
                     retrieval_type = 'table_segment_node_augmentation'
                 
-                self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, retrieval_type)
-                self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, retrieval_type)
+                self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, retrieval_type, source_rank, target_rank)
+                self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, retrieval_type, target_rank, source_rank)
 
     def get_expanded_query(self, nl_question, node_id, query_node_type):
         if query_node_type == 'table segment':
@@ -183,13 +184,13 @@ class GraphQueryEngine:
         
         return expanded_query
 
-    def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type):
+    def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type, source_rank=0, target_rank=0):
         # add source and target node
         if source_node_id not in graph:
-            graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type]]}
+            graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type, source_rank, target_rank]]}
         # add target node
         else:
-            graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type])
+            graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
     
     def assign_scores(self, graph):
         for node_id, node_info in graph.items():
@@ -223,7 +224,7 @@ def get_context(retrieved_graph, graph_query_engine):
                 retrieved_table_set.add(table_id)
                 context += table['text']
         
-            max_linked_node_id, max_score, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval'))
+            max_linked_node_id, max_score, a, b, c = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
 
             if max_linked_node_id in retrieved_passage_set:
                 continue
@@ -248,8 +249,8 @@ def get_context(retrieved_graph, graph_query_engine):
             retrieved_passage_set.add(node_id)
             passage_content = graph_query_engine.passage_key_to_content[node_id]
             passage_text = passage_content['title'] + ' ' + passage_content['text']
-            
-            max_linked_node_id, max_score, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval'))
+            #'Who created the series in which the character of Robert , played by actor Nonso Anozie , appeared ? [SEP] Nonso Anozie [SEP] Year, Title, Role, Notes [SEP] 2007, Prime Suspect 7 : The Final Act, Robert, Episode : Part 1'
+            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
             table_id = max_linked_node_id.split('_')[0]
             table = table_key_to_content[table_id]
             
@@ -298,6 +299,8 @@ def main(cfg: DictConfig):
             recall_list.append(1)
         else:
             qa_datum['retrieved_graph'] = retrieved_graph
+            if  "hard_negative_ctxs" in qa_datum:
+                del qa_datum["hard_negative_ctxs"]
             error_cases.append(qa_datum)
             recall_list.append(0)
         
