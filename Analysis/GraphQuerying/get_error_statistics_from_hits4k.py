@@ -2,39 +2,60 @@ import json
 from tqdm import tqdm
 from Algorithms.Ours.dpr.utils.tokenizers import SimpleTokenizer
 from Algorithms.Ours.dpr.data.qa_validation import has_answer, _normalize
-
+import unicodedata
+import re
+def remove_accents_and_non_ascii(text):
+    # Normalize the text to decompose combined characters
+    normalized_text = unicodedata.normalize('NFD', text)
+    # Remove all characters that are not ASCII
+    ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
+    # Remove any remaining non-letter characters
+    cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?]', '', ascii_text)
+    return cleaned_text
 def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, tokenizer, query_topk, augment_topk, filtered_retrieval_type):
     context = ""
     retrieved_table_set = set()
     retrieved_passage_set = set()
-    sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
-    final_node_rank = len(sorted_retrieved_graph)
     new_sorted_retrieved_graph = []
+    sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
+    final_node_rank = 0
+    
     for node_rank, (node_id, node_info) in enumerate(sorted_retrieved_graph):
-        
-        # if len(node_info['linked_nodes']) == 0:
-        #     continue
-
+        node_is_added = False
         if node_info['type'] == 'table segment':
             linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
             if len(linked_nodes) == 0:
                 continue
             else:
                 node_info['linked_nodes'] = linked_nodes
-                new_sorted_retrieved_graph.append((node_id, node_info))
             
             table_id = node_id.split('_')[0]
             table = table_key_to_content[table_id]
-            
+
+            if len(tokenizer.tokenize(_normalize(remove_accents_and_non_ascii(context))).words(uncased=True)) > 4096:
+                break
+
             if table_id not in retrieved_table_set:
+                if not node_is_added:
+                    node_is_added = True
+                    new_sorted_retrieved_graph.append((node_id, node_info))
+                    final_node_rank += 1
+                
                 retrieved_table_set.add(table_id)
                 context += table['text']
-                
+
+            if len(tokenizer.tokenize(_normalize(remove_accents_and_non_ascii(context))).words(uncased=True)) > 4096:
+                break
+
             max_linked_node_id, max_score, _, _, _ = max(linked_nodes, key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
 
             if max_linked_node_id in retrieved_passage_set:
+                if not node_is_added:
+                    node_is_added = True
+                    new_sorted_retrieved_graph.append((node_id, node_info))
+                    final_node_rank += 1
                 continue
-            
+
             retrieved_passage_set.add(max_linked_node_id)
             passage_content = passage_key_to_content[max_linked_node_id]
             passage_text = passage_content['title'] + ' ' + passage_content['text']
@@ -47,9 +68,11 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
             
             two_node_graph_text = table_segment_text + '\n' + passage_text
             context += two_node_graph_text
-            if len(tokenizer.tokenize(_normalize(context)).words(uncased=True)) > 4096:
-                final_node_rank = node_rank
-                break
+            
+            if not node_is_added:
+                node_is_added = True
+                new_sorted_retrieved_graph.append((node_id, node_info))
+                final_node_rank += 1
 
         elif node_info['type'] == 'passage':
             linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
@@ -58,14 +81,16 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
                 continue
             else:
                 node_info['linked_nodes'] = linked_nodes
-                new_sorted_retrieved_graph.append((node_id, node_info))
-
-            if node_id in retrieved_passage_set:
-                continue
             
-            retrieved_passage_set.add(node_id)
-            passage_content = passage_key_to_content[node_id]
-            passage_text = passage_content['title'] + ' ' + passage_content['text']
+            if node_id in retrieved_passage_set:
+                if not node_is_added:
+                    node_is_added = True
+                    new_sorted_retrieved_graph.append((node_id, node_info))
+                    final_node_rank += 1
+                continue
+
+            if len(tokenizer.tokenize(_normalize(remove_accents_and_non_ascii(context))).words(uncased=True)) > 4096:
+                break
 
             max_linked_node_id, max_score, _, _, _ = max(linked_nodes, key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
             table_id = max_linked_node_id.split('_')[0]
@@ -74,31 +99,42 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
             if table_id not in retrieved_table_set:
                 retrieved_table_set.add(table_id)
                 context += table['text']
-                
+
+            if len(tokenizer.tokenize(_normalize(remove_accents_and_non_ascii(context))).words(uncased=True)) > 4096:
+                break
+
             row_id = int(max_linked_node_id.split('_')[1])
             table_rows = table['text'].split('\n')
             column_name = table_rows[0]
             row_values = table_rows[row_id+1]
             table_segment_text = column_name + '\n' + row_values
-            
+
+            retrieved_passage_set.add(node_id)
+            passage_content = passage_key_to_content[node_id]
+            passage_text = passage_content['title'] + ' ' + passage_content['text']
+
             two_node_graph_text = table_segment_text + '\n' + passage_text
             context += two_node_graph_text
-            if len(tokenizer.tokenize(_normalize(context)).words(uncased=True)) > 4096:
-                final_node_rank = node_rank
-                break
+            if not node_is_added:
+                node_is_added = True
+                new_sorted_retrieved_graph.append((node_id, node_info))
+                final_node_rank += 1
 
-    return context, new_sorted_retrieved_graph, final_node_rank
+    return remove_accents_and_non_ascii(context), new_sorted_retrieved_graph, final_node_rank
 
 if __name__ == '__main__':
+    
     error_cases_path = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_passage_4_1.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json"
     error_cases_path_1 = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_passage_4_1.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json"
     error_cases_path_2 = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_both_4_1.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json"
     query_topk = 4
     augment_topk = 1
-    filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation', 'table_segment_node_augmentation']#, 'table_segment_node_augmentation']#, 'table_segment_node_augmentation']#['two_node_graph_retrieval', 'passage_node_augmentation']
+    filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation']#, 'passage_node_augmentation']#, 'passage_node_augmentation', 'table_segment_node_augmentation']#, 'table_segment_node_augmentation']#, 'table_segment_node_augmentation']#['two_node_graph_retrieval', 'passage_node_augmentation']
     data_graph_error_cases_path = "/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases.json"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    error_case_path = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_passage_4_1.json"
+    
     # retrieval_error_cases = json.load(open(error_cases_path))
     # retrieval_error_cases_1 = json.load(open(error_cases_path_1))
     #a = ['9c9398e85be320e4', 'cc9be19675c95343', 'd18e42fc2b58845d'] # 3개 다 both none일듯
@@ -142,7 +178,12 @@ if __name__ == '__main__':
         
         
         retrieved_graph = retrieval_error_case['retrieved_graph']
-        context, sorted_retrieved_graph, final_node_rank = get_context(retrieved_graph, table_key_to_content, passage_key_to_content, tokenizer, query_topk, augment_topk, filtered_retrieval_type)
+        normalized_context, sorted_retrieved_graph, final_node_rank = get_context(retrieved_graph, table_key_to_content, passage_key_to_content, tokenizer, query_topk, augment_topk, filtered_retrieval_type)
+        normalized_answers = [remove_accents_and_non_ascii(answer) for answer in answers]
+        is_has_answer = has_answer(normalized_answers, normalized_context, tokenizer, 'string', max_length=4096)
+        
+        if is_has_answer:
+            continue
         
         table_exist = False
         passage_exist = False
@@ -158,7 +199,7 @@ if __name__ == '__main__':
                     table_exist = True
             
             if retrieved_node_info['type'] == 'passage' and not passage_exist:
-                if node_id in positive_passages:
+                if node_id in positive_passages or len(positive_passages) == 0:
                     passage_exist = True
             
         if table_exist and not passage_exist:
@@ -167,13 +208,11 @@ if __name__ == '__main__':
             error_case['table_none'] += 1
         elif not table_exist and not passage_exist:
             error_case['both_none'] += 1
-            pasage_none_list.append(qid)
         else:
             print('error')
-    print(error_case)
-    with open('./both_passage.json', 'w') as f:
-        json.dump(pasage_none_list, f)
 
+    print(error_case)
+    # 예외: '7babe6e8962eb0dc', table =1, passage , table 1
     # Table segment가 없는 경우에 대한 조사가 필요함.
     
     # print("Total Number of Error Cases: ", len(retrieval_error_cases))
