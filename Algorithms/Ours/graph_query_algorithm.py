@@ -144,11 +144,11 @@ class GraphQueryEngine:
             expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
             
             if query_node_type == 'table segment':
-                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 100)
+                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 20)
                 retrieved_id_list = retrieved_node_info[0][:self.top_k_of_passage]
                 retrieved_score_list = retrieved_node_info[2][:self.top_k_of_passage]
             else:
-                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 100)
+                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 20)
                 retrieved_id_list = retrieved_node_info[0][:self.top_k_of_table]
                 retrieved_score_list = retrieved_node_info[2][:self.top_k_of_table]
             
@@ -195,8 +195,8 @@ class GraphQueryEngine:
     def assign_scores(self, graph):
         for node_id, node_info in graph.items():
 
-            if 'score' in node_info:
-                continue
+            # if 'score' in node_info:
+            #     continue
 
             linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
             
@@ -284,6 +284,7 @@ def main(cfg: DictConfig):
     query_time_list = []
     retrieved_query_list = []
     for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
+        
         nl_question = qa_datum['question']
         answers = qa_datum['answers']
         
@@ -292,27 +293,27 @@ def main(cfg: DictConfig):
         end_time = time.time()
         query_time_list.append(end_time - init_time)
         
-        context = get_context(retrieved_graph, graph_query_engine)
-        is_has_answer = has_answer(answers, context, tokenizer, 'string', max_length=4096)
+        # context = get_context(retrieved_graph, graph_query_engine)
+        # is_has_answer = has_answer(answers, context, tokenizer, 'string', max_length=4096)
 
-        if is_has_answer:
-            recall_list.append(1)
-        else:
-            qa_datum['retrieved_graph'] = retrieved_graph
-            if  "hard_negative_ctxs" in qa_datum:
-                del qa_datum["hard_negative_ctxs"]
-            error_cases.append(qa_datum)
-            recall_list.append(0)
+        # if is_has_answer:
+        #     recall_list.append(1)
+        # else:
+        #     qa_datum['retrieved_graph'] = retrieved_graph
+        #     if  "hard_negative_ctxs" in qa_datum:
+        #         del qa_datum["hard_negative_ctxs"]
+        #     error_cases.append(qa_datum)
+        #     recall_list.append(0)
         
         retrieved_query_list.append(retrieved_graph)
 
-    print(f"HITS4K: {sum(recall_list) / len(recall_list)}")
-    print(f"Average query time: {sum(query_time_list) / len(query_time_list)}")
+    # print(f"HITS4K: {sum(recall_list) / len(recall_list)}")
+    # print(f"Average query time: {sum(query_time_list) / len(query_time_list)}")
     
     # save integrated graph
     print(f"Saving integrated graph...")
     json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
     json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
-    json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
+    # json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
 if __name__ == "__main__":
     main()

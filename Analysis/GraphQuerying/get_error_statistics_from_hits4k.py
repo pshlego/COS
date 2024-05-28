@@ -10,7 +10,7 @@ def remove_accents_and_non_ascii(text):
     # Remove all characters that are not ASCII
     ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
     # Remove any remaining non-letter characters
-    cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?]', '', ascii_text)
+    cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?\-]', '', ascii_text)
     return cleaned_text
 def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, tokenizer, query_topk, augment_topk, filtered_retrieval_type):
     context = ""
@@ -115,6 +115,7 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
 
             two_node_graph_text = table_segment_text + '\n' + passage_text
             context += two_node_graph_text
+
             if not node_is_added:
                 node_is_added = True
                 new_sorted_retrieved_graph.append((node_id, node_info))
@@ -123,26 +124,25 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
     return remove_accents_and_non_ascii(context), new_sorted_retrieved_graph, final_node_rank
 
 if __name__ == '__main__':
-    
-    error_cases_path = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_passage_4_1.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json"
-    error_cases_path_1 = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_passage_4_1.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json"
-    error_cases_path_2 = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_both_4_1.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json"
     query_topk = 4
     augment_topk = 1
-    filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation']#, 'passage_node_augmentation']#, 'passage_node_augmentation', 'table_segment_node_augmentation']#, 'table_segment_node_augmentation']#, 'table_segment_node_augmentation']#['two_node_graph_retrieval', 'passage_node_augmentation']
-    data_graph_error_cases_path = "/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases.json"
+    filter_type = 'passage' # table, passage, both
+    if filter_type == 'table':
+        filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation']
+    elif filter_type == 'passage':
+        filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation']
+    else:
+        filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation', 'table_segment_node_augmentation']
+    
+    error_cases_path = f"/mnt/sdd/shpark/error_case_analysis_results/error_cases_{filter_type}_{query_topk}_{augment_topk}_v2.json"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    error_case_path = "/mnt/sdd/shpark/error_case_analysis_results/error_cases_passage_4_1.json"
+    error_case_statistics_result_path = "/home/shpark/OTT_QA_Workspace/error_cases_passage_4_1.json"
+    gold_graph_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
+    error_qid_list = []
     
-    # retrieval_error_cases = json.load(open(error_cases_path))
-    # retrieval_error_cases_1 = json.load(open(error_cases_path_1))
-    #a = ['9c9398e85be320e4', 'cc9be19675c95343', 'd18e42fc2b58845d'] # 3개 다 both none일듯
-    #b = 4e896f5593b5f163
-    #de6c9822e5d9503c
-    a = ['037c2856d7ddc3fa', '4f8e7ade5ff9a1e2', 'de54043e5ebeb262', 'b4a3a106c99e6142'] #1. 정답은 있지만, 제대로된 검색이 아님.
+    table_segment_id_to_linked_passages = json.load(open(gold_graph_path))
     retrieval_error_cases = json.load(open(error_cases_path))
-    data_graph_error_cases = json.load(open(data_graph_error_cases_path))
     
     table_key_to_content = {}
     table_contents = json.load(open(table_data_path))
@@ -157,12 +157,14 @@ if __name__ == '__main__':
     tokenizer = SimpleTokenizer()
     
     error_case = {'table_none':0, 'passage_none':0, 'both_none':0}
-    pasage_none_list = []
+
+    passage_error_cases = {}
     for qid, retrieval_error_case in tqdm(retrieval_error_cases.items()):
         answers = retrieval_error_case['answers']
         question = retrieval_error_case['question']
         positive_ctxs = retrieval_error_case['positive_ctxs']
         positive_table_segments = set()
+        raw_positive_table_segments = set()
         positive_passages = set()
         for positive_ctx in positive_ctxs:
             chunk_id = positive_ctx['chunk_id']
@@ -171,11 +173,20 @@ if __name__ == '__main__':
                 row_id = answer_node[1][0]
                 chunk_row_id = chunk_rows.index(row_id)
                 table_segment_id = f"{chunk_id}_{chunk_row_id}"
+                raw_table_segment_id = f"{chunk_id}_{row_id}"
                 positive_table_segments.add(table_segment_id)
+                raw_positive_table_segments.add(raw_table_segment_id)
                 if answer_node[3] == 'passage':
                     passage_id = answer_node[2].replace('/wiki/','').replace('_', ' ')
                     positive_passages.add(passage_id)
         
+        if len(positive_passages) == 0:
+            for raw_table_segment_id in raw_positive_table_segments:
+                table_id = '_'.join(raw_table_segment_id.split('_')[:-2])
+                row_id = int(raw_table_segment_id.split('_')[-1])
+                linked_passages = table_segment_id_to_linked_passages[table_id][row_id]
+                for linked_passage in linked_passages:
+                    positive_passages.add(linked_passage[1])
         
         retrieved_graph = retrieval_error_case['retrieved_graph']
         normalized_context, sorted_retrieved_graph, final_node_rank = get_context(retrieved_graph, table_key_to_content, passage_key_to_content, tokenizer, query_topk, augment_topk, filtered_retrieval_type)
@@ -185,6 +196,7 @@ if __name__ == '__main__':
         if is_has_answer:
             continue
         
+        error_qid_list.append(qid)
         table_exist = False
         passage_exist = False
         for node_id, retrieved_node_info in sorted_retrieved_graph[:final_node_rank]:
@@ -204,17 +216,22 @@ if __name__ == '__main__':
             
         if table_exist and not passage_exist:
             error_case['passage_none'] += 1
+            passage_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': sorted_retrieved_graph, 'final_node_rank': final_node_rank}
         elif passage_exist and not table_exist:
             error_case['table_none'] += 1
         elif not table_exist and not passage_exist:
             error_case['both_none'] += 1
         else:
+            passage_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': sorted_retrieved_graph, 'final_node_rank': final_node_rank}
             print('error')
 
     print(error_case)
+    
+    with open(error_case_statistics_result_path, 'w') as f:
+        json.dump(error_qid_list, f)
     # 예외: '7babe6e8962eb0dc', table =1, passage , table 1
     # Table segment가 없는 경우에 대한 조사가 필요함.
-    
+    # data_graph_error_cases = json.load(open(data_graph_error_cases_path))
     # print("Total Number of Error Cases: ", len(retrieval_error_cases))
     # data_graph_error_id_list = list(set(retrieval_error_cases.keys()).intersection(set([data_graph_error_case['id'] for data_graph_error_case in data_graph_error_cases])))
     # print("Total Number of Data Graph Error Cases: ", len(data_graph_error_id_list))
@@ -230,4 +247,7 @@ if __name__ == '__main__':
     #     retrieved_graph = retrieval_error_cases[non_data_graph_error_id]['retrieved_graph']
     #     context, sorted_retrieved_graph, final_node_rank = get_context(retrieved_graph, table_key_to_content, passage_key_to_content, tokenizer)
     #     print('final_node_rank: ', final_node_rank)
-#'6ad2c846a3dbab5c'
+#'6ad2c846a3dbab5c' both += 1, passage += 2
+#table not found += 1
+#passage +=1
+#table not found += 1, passage += 1
