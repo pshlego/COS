@@ -26,7 +26,7 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
     for node_rank, (node_id, node_info) in enumerate(sorted_retrieved_graph):
         node_is_added = False
         if node_info['type'] == 'table segment':
-            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
+            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 2) and (x[3] < 2)) or x[2] == 'two_node_graph_retrieval']
             if len(linked_nodes) == 0:
                 continue
             else:
@@ -80,7 +80,7 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
                 final_node_rank += 1
 
         elif node_info['type'] == 'passage':
-            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
+            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 2) and (x[4] < 2)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
 
             if len(linked_nodes) == 0:
                 continue
@@ -144,12 +144,12 @@ if __name__ == '__main__':
     else:
         filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation', 'table_segment_node_augmentation']
         
-    error_cases_path = f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_{filter_type}_{query_topk}_{augment_topk}_v2_30.json"
+    error_cases_path = f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_passage_passage_10_2_table_1_1_sota.json"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/table_error_cases_passage_10_2.json"
-    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/passage_error_cases_passage_10_2.json"
-    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/both_error_cases_passage_10_2.json"
+    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/table_error_cases_passage_10_2_short_v2.json"
+    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/passage_error_cases_passage_10_2_short_v2.json"
+    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/both_error_cases_passage_10_2_short_v2.json"
     gold_graph_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
     error_qid_list = []
     
@@ -229,13 +229,13 @@ if __name__ == '__main__':
             
         if table_exist and not passage_exist:
             error_case['passage_none'] += 1
-            passage_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': sorted_retrieved_graph, 'final_node_rank': final_node_rank}
+            passage_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
         elif passage_exist and not table_exist:
             error_case['table_none'] += 1
-            table_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': sorted_retrieved_graph, 'final_node_rank': final_node_rank}
+            table_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
         elif not table_exist and not passage_exist:
             error_case['both_none'] += 1
-            both_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': sorted_retrieved_graph, 'final_node_rank': final_node_rank}
+            both_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
         else:
             print('error')
 

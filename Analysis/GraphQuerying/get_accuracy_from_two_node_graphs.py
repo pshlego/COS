@@ -15,7 +15,7 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/output/integrated_graph_augmented_both_50_2_v13.json"
+    retrieved_graphs_path = "/mnt/sdd/shpark/output/title_wo_short_column_short_value_title_w_v3.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -37,11 +37,11 @@ if __name__ == "__main__":
     with open(retrieved_graphs_path, 'r') as f:
         retrieved_graphs = json.load(f)
     
-    augment_type_list = ['both']
-    passage_query_topk_list_1 = [10,9,8,7,6,5]
-    passage_augment_topk_list_1 = [1,2]
-    table_query_topk_list_1 = list(range(1,11))
-    table_augment_topk_list_1 = [3,2,1]
+    augment_type_list = ['passage']
+    passage_query_topk_list_1 = [10]
+    passage_augment_topk_list_1 = [2]
+    table_query_topk_list_1 = [1]
+    table_augment_topk_list_1 = [1]
     total_recall_dict = {}
     tokenizer = SimpleTokenizer()
     #error_cases = {}
@@ -100,6 +100,10 @@ if __name__ == "__main__":
                         for revised_retrieved_graph, qa_datum in zip(revised_retrieved_graphs, qa_dataset):
                             two_node_graph_count = 0
                             answers = qa_datum['answers']
+                            # if qa_datum['id'] not in ['e46aefefda60a34d', 'dd6a935fc3ca3446', 'b0fe5731a19a8fb9', '822fa10c6b80eb78', '960022483a9d97c4', 'a70cfc60e541827f', '622783be803c181c', '08d4e37cbc7bb2c5', '1d7f52d9c59e6fc5', 'd8338761374ef6a8', '90b0d5dcf0eaf6b5', '1f1484f82a7625dd']:
+                            #     continue
+                            # if qa_datum['id'] not in ['b5cfc92181b6511b', '6ad2c846a3dbab5c', '7a158221e7c9b6eb']:
+                            #     continue
                             context = ""
                             # get sorted retrieved graph
                             all_included = []
@@ -200,7 +204,7 @@ if __name__ == "__main__":
                         total_recall_dict[setting_key] = sum(recall_list) / len(recall_list)
                         print(f"Setting: {setting_key}, Recall: {total_recall_dict[setting_key]}")
                         
-                        with open(f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_{setting_key}_v2_100.json", 'w') as f:
+                        with open(f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_{setting_key}_sota.json", 'w') as f:
                             json.dump(error_cases, f, indent=4)
                 
     print(total_recall_dict)
