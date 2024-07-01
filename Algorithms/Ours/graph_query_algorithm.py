@@ -1,6 +1,7 @@
 import json
 import time
 import hydra
+import torch
 from tqdm import tqdm
 from pymongo import MongoClient
 from omegaconf import DictConfig
@@ -8,6 +9,7 @@ from ColBERT.colbert import Searcher
 from ColBERT.colbert.infra import ColBERTConfig
 from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 class GraphQueryEngine:
     def __init__(self, cfg):
@@ -55,6 +57,10 @@ class GraphQueryEngine:
         self.colbert_two_node_graph_retriever = Searcher(index=f"{two_node_graph_index_name}.nbits{cfg.nbits}", config=two_node_graph_config, index_root=cfg.two_node_graph_index_root_path)
         self.colbert_table_retriever = Searcher(index=f"{table_index_name}.nbits{cfg.nbits}", config=table_config, index_root=cfg.table_index_root_path)
         self.colbert_passage_retriever = Searcher(index=f"{passage_index_name}.nbits{cfg.nbits}", config=passage_config, index_root=cfg.passage_index_root_path)
+        self.cross_encoder_two_node_graph_retriever = AutoModelForSequenceClassification.from_pretrained("/mnt/sdd/shpark/cross_encoder/training_ott_qa_cross-encoder-cross-encoder-ms-marco-MiniLM-L-6-v2-2024-06-06_02-04-26")
+        self.cross_encoder_two_node_graph_retriever.eval()
+        self.cross_encoder_two_node_graph_retriever.to(device = torch.device("cuda"))
+        self.tokenizer = AutoTokenizer.from_pretrained('cross-encoder/ms-marco-MiniLM-L-6-v2')
         
         # load experimental settings
         self.top_k_of_two_node_graph = cfg.top_k_of_two_node_graph
@@ -64,35 +70,90 @@ class GraphQueryEngine:
         self.top_k_of_passage = cfg.top_k_of_passage
 
         self.node_scoring_method = cfg.node_scoring_method
+        self.batch_size = cfg.batch_size
 
-    def query(self, nl_question):
-        # 1. two-node graph retrieval
-        retrieved_two_node_graphs = self.retrieve_two_node_graphs(nl_question)
-        
-        # 2. Graph Integration
-        integrated_graph = self.integrate_graphs(retrieved_two_node_graphs)
+    def query(self, nl_question, retrieval_time = 2):
+        for i in range(retrieval_time):
+            if i == 0:
+                # 1. two-node graph retrieval
+                retrieved_two_node_graphs = self.retrieve_two_node_graphs(nl_question)
+                
+                # 2. Graph Integration
+                integrated_graph = self.integrate_graphs(retrieved_two_node_graphs)
+                retrieval_type = None
+            else:
+                self.reranking_two_node_graphs(nl_question, integrated_graph)
+                retrieval_type = 'two_node_graph_reranking'
+                self.assign_scores(integrated_graph, retrieval_type)
+            
+            if i < retrieval_time:
+                topk_table_segment_nodes = []
+                topk_passage_nodes = []
+                for node_id, node_info in integrated_graph.items():
+                    if node_info['type'] == 'table segment':
+                        topk_table_segment_nodes.append([node_id, node_info['score']])
+                    elif node_info['type'] == 'passage':
+                        topk_passage_nodes.append([node_id, node_info['score']])
 
-        topk_table_segment_nodes = []
-        topk_passage_nodes = []
-        for node_id, node_info in integrated_graph.items():
-            if node_info['type'] == 'table segment':
-                topk_table_segment_nodes.append([node_id, node_info['score']])
-            elif node_info['type'] == 'passage':
-                topk_passage_nodes.append([node_id, node_info['score']])
-
-        topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_augmentation]
-        topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
-        
-        # 3.1 Passage Node Augmentation
-        self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes, 'table segment', 'passage')
-        
-        # 3.2 Table Segment Node Augmentation
-        self.augment_node(integrated_graph, nl_question, topk_passage_nodes, 'passage', 'table segment')
-        
-        self.assign_scores(integrated_graph)
-        retrieved_graphs = integrated_graph
+                topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_augmentation]
+                topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
+                
+                # 3.1 Passage Node Augmentation
+                self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes, 'table segment', 'passage', i)
+                
+                # 3.2 Table Segment Node Augmentation
+                self.augment_node(integrated_graph, nl_question, topk_passage_nodes, 'passage', 'table segment', i)
+                
+                self.assign_scores(integrated_graph, retrieval_type)
+            
+            retrieved_graphs = integrated_graph
         
         return retrieved_graphs
+    
+    def reranking_two_node_graphs(self, nl_question, retrieved_graphs):
+        two_node_graphs = []
+        two_node_graphs_set = set()
+        for node_id, node_info in retrieved_graphs.items():
+            
+            if node_info['type'] == 'table segment':
+                table_id = node_id.split('_')[0]
+                row_id = int(node_id.split('_')[1])
+                table = self.table_key_to_content[table_id]
+                table_title = table['title']
+                table_rows = table['text'].split('\n')
+                column_names = table_rows[0]
+                row_values = table_rows[row_id+1]
+                table_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
+                
+                for linked_node in node_info['linked_nodes']:
+                    linked_node_id = linked_node[0]
+                    two_node_graph_id = f"{node_id}_{linked_node_id}"
+                    
+                    if two_node_graph_id not in two_node_graphs_set:
+                        two_node_graphs_set.add(two_node_graph_id)
+                    else:
+                        continue
+                    
+                    passage_text = self.passage_key_to_content[linked_node_id]['text']
+                    graph_text = table_text + ' [SEP] ' + passage_text
+                    two_node_graphs.append({'table_segment_node_id': node_id, 'passage_id': linked_node_id, 'text': graph_text})
+
+        for i in range(0, len(two_node_graphs), self.batch_size):
+            two_node_graph_batch = two_node_graphs[i:i+self.batch_size]
+            two_node_graph_texts = [two_node_graph['text'] for two_node_graph in two_node_graph_batch]
+            nl_questions = [nl_question] * len(two_node_graph_texts)
+            two_node_graph_features = self.tokenizer(nl_questions, two_node_graph_texts, padding=True, truncation=True, return_tensors="pt").to(device = torch.device("cuda"))
+            
+            with torch.no_grad():
+                two_node_graph_scores = self.cross_encoder_two_node_graph_retriever(**two_node_graph_features).logits
+            
+                for two_node_graph, score in zip(two_node_graph_batch, two_node_graph_scores):
+                    table_segment_node_id = two_node_graph['table_segment_node_id']
+                    passage_id = two_node_graph['passage_id']
+                    reranking_score = float(score)            
+                    self.add_node(retrieved_graphs, 'table segment', table_segment_node_id, passage_id, reranking_score, 'two_node_graph_reranking')
+                    self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'two_node_graph_reranking')
+        
     
     def retrieve_two_node_graphs(self, nl_question):
         retrieved_two_node_graphs_info = self.colbert_two_node_graph_retriever.search(nl_question, 10000)
@@ -139,29 +200,41 @@ class GraphQueryEngine:
 
         return integrated_graph
 
-    def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type):
+    def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
         for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
             expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
             
             if query_node_type == 'table segment':
                 retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 20)
-                retrieved_id_list = retrieved_node_info[0][:self.top_k_of_passage]
-                retrieved_score_list = retrieved_node_info[2][:self.top_k_of_passage]
+                retrieved_id_list = retrieved_node_info[0]
+                retrieved_score_list = retrieved_node_info[2]
+                top_k = self.top_k_of_passage
             else:
                 retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 20)
-                retrieved_id_list = retrieved_node_info[0][:self.top_k_of_table]
-                retrieved_score_list = retrieved_node_info[2][:self.top_k_of_table]
-            
+                retrieved_id_list = retrieved_node_info[0]
+                retrieved_score_list = retrieved_node_info[2]
+                top_k = self.top_k_of_table
+
             for target_rank, retrieved_id in enumerate(retrieved_id_list):
+                if target_rank >= top_k:
+                    break
+                
                 if query_node_type == 'table segment':
                     retrieved_node_id = self.id_to_passage_key[str(retrieved_id)]
-                    retrieval_type = 'passage_node_augmentation'
+                    augment_type = f'passage_node_augmentation_{retrieval_time}'
                 else:
                     retrieved_node_id = self.id_to_table_key[str(retrieved_id)]
-                    retrieval_type = 'table_segment_node_augmentation'
+                    augment_type = f'table_segment_node_augmentation_{retrieval_time}'
                 
-                self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, retrieval_type, source_rank, target_rank)
-                self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, retrieval_type, target_rank, source_rank)
+                # if retrieval_time > 0 and retrieved_node_id in graph:
+                #     retrieval_type_list = [linked_node[2] for linked_node in graph[retrieved_node_id]['linked_nodes'] if 'augmentation' in linked_node[2] and query_node_id == linked_node[0]]
+                #     if len(retrieval_type_list) > 0:
+                #         top_k += 1
+                
+                self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, augment_type, source_rank, target_rank)
+                self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, augment_type, target_rank, source_rank)
+
+
 
     def get_expanded_query(self, nl_question, node_id, query_node_type):
         if query_node_type == 'table segment':
@@ -192,13 +265,16 @@ class GraphQueryEngine:
         else:
             graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
     
-    def assign_scores(self, graph):
+    def assign_scores(self, graph, retrieval_type = None):
         for node_id, node_info in graph.items():
 
             # if 'score' in node_info:
             #     continue
-
-            linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
+            if retrieval_type is not None:
+                filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
+                linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes'] if linked_node[2] not in filtered_retrieval_type]
+            else:
+                linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
             
             if self.node_scoring_method == 'min':
                 node_score = min(linked_scores)
@@ -289,7 +365,7 @@ def main(cfg: DictConfig):
         answers = qa_datum['answers']
         
         init_time = time.time()
-        retrieved_graph = graph_query_engine.query(nl_question)
+        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
         end_time = time.time()
         query_time_list.append(end_time - init_time)
         

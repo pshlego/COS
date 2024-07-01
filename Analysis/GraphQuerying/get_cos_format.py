@@ -15,7 +15,7 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/output/title_wo_short_column_short_value_title_w_v3.json"
+    retrieved_graphs_path = "/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     with open(retrieved_graphs_path, 'r') as f:
         retrieved_graphs = json.load(f)
     cos_format_results = []
-    augment_type_list = ['both']
+    augment_type_list = ['rerank']
     query_topk_list_1 = [10]#list(range(1,31))#[5,4,3,2,1] 
     augment_topk_list_1 = [2]#[1,2,3,4,5]
     total_recall_dict = {}
@@ -60,6 +60,10 @@ if __name__ == "__main__":
             filtered_retrieval_type = ['two_node_graph_retrieval']
             query_topk_list = [1] 
             augment_topk_list = [1]
+        elif augment_type == 'rerank':
+            filtered_retrieval_type = ['two_node_graph_reranking', "passage_node_augmentation_1"]
+            query_topk_list = [10] 
+            augment_topk_list = [2]
         for query_topk in query_topk_list:
             for augment_topk in augment_topk_list:
                 error_cases = {}
@@ -70,9 +74,9 @@ if __name__ == "__main__":
                     revised_retrieved_graph = {}
                     for node_id, node_info in retrieved_graph.items():
                         if node_info['type'] == 'table segment':
-                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 2) and (x[3] < 2)) or x[2] == 'two_node_graph_retrieval']
+                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_reranking']
                         elif node_info['type'] == 'passage':
-                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 2) and (x[4] < 2)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
+                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_reranking']
                         
                         if len(linked_nodes) == 0:
                             continue
@@ -181,6 +185,6 @@ if __name__ == "__main__":
                     cos_format_result['ctxs'] = all_included
                     cos_format_results.append(cos_format_result)
                 
-                with open(f"/mnt/sdd/shpark/output/cos_format_{setting_key}_short_v3.json", 'w') as f:
+                with open(f"/mnt/sdd/shpark/output/reranking_150_10_2.json", 'w') as f:
                     json.dump(cos_format_results, f, indent=4)
         

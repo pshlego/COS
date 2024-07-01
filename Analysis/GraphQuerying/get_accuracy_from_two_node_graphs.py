@@ -15,7 +15,7 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/output/title_wo_short_column_short_value_title_w_v3.json"
+    retrieved_graphs_path = "/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     with open(retrieved_graphs_path, 'r') as f:
         retrieved_graphs = json.load(f)
     
-    augment_type_list = ['passage']
+    augment_type_list = ['rerank']
     passage_query_topk_list_1 = [10]
     passage_augment_topk_list_1 = [2]
     table_query_topk_list_1 = [1]
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     #error_cases = {}
     for augment_type in augment_type_list:
         if augment_type == 'both':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation', 'passage_node_augmentation']
+            filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation', 'passage_node_augmentation_1']
             passage_query_topk_list_1 = passage_query_topk_list_1
             passage_augment_topk_list_1 = passage_augment_topk_list_1
             table_query_topk_list_1 = table_query_topk_list_1
@@ -59,7 +59,7 @@ if __name__ == "__main__":
             table_query_topk_list_1 = table_query_topk_list_1
             table_augment_topk_list_1 = table_augment_topk_list_1
         elif augment_type == 'passage':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation']
+            filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation_1']
             passage_query_topk_list_1 = passage_query_topk_list_1
             passage_augment_topk_list_1 = passage_augment_topk_list_1
             table_query_topk_list_1 = table_query_topk_list_1
@@ -68,7 +68,11 @@ if __name__ == "__main__":
             filtered_retrieval_type = ['two_node_graph_retrieval']
             query_topk_list = [1] 
             augment_topk_list = [1]
-            
+        elif augment_type == 'rerank':
+            filtered_retrieval_type = ['two_node_graph_reranking', "passage_node_augmentation_1"]
+            query_topk_list = [10] 
+            augment_topk_list = [2]
+
         for passage_query_topk in passage_query_topk_list_1:
             for table_query_topk in table_query_topk_list_1:
                 for passage_augment_topk in passage_augment_topk_list_1:
@@ -80,10 +84,16 @@ if __name__ == "__main__":
                         for retrieved_graph in retrieved_graphs:
                             revised_retrieved_graph = {}
                             for node_id, node_info in retrieved_graph.items():
+
+                                # if 'passage_node_augmentation_0' in [x[2] for x in node_info['linked_nodes']]:
+                                #     passage_augment_topk = 2
+                                # else:
+                                #     passage_augment_topk = 1                    
+
                                 if node_info['type'] == 'table segment':
-                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[3] < passage_query_topk) and (x[4] < passage_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < table_query_topk) and (x[3] < table_augment_topk)) or x[2] == 'two_node_graph_retrieval']
+                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < passage_query_topk) and (x[4] < passage_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < table_query_topk) and (x[3] < table_augment_topk)) or x[2] == 'two_node_graph_reranking']
                                 elif node_info['type'] == 'passage':
-                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < table_query_topk) and (x[4] < table_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < passage_query_topk) and (x[3] < passage_augment_topk)) or x[2] == 'two_node_graph_retrieval']
+                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < table_query_topk) and (x[4] < table_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < passage_query_topk) and (x[3] < passage_augment_topk)) or x[2] == 'two_node_graph_reranking']
                                 
                                 if len(linked_nodes) == 0:
                                     continue
@@ -97,13 +107,13 @@ if __name__ == "__main__":
                                 
                             revised_retrieved_graphs.append(revised_retrieved_graph)
                             
+                        
                         for revised_retrieved_graph, qa_datum in zip(revised_retrieved_graphs, qa_dataset):
+                        # for revised_retrieved_graph, qa_datum in zip(retrieved_graphs, qa_dataset):
+                            # if qa_datum['id'] != 'e01c6b4a614d2d38':
+                            #     continue
                             two_node_graph_count = 0
                             answers = qa_datum['answers']
-                            # if qa_datum['id'] not in ['e46aefefda60a34d', 'dd6a935fc3ca3446', 'b0fe5731a19a8fb9', '822fa10c6b80eb78', '960022483a9d97c4', 'a70cfc60e541827f', '622783be803c181c', '08d4e37cbc7bb2c5', '1d7f52d9c59e6fc5', 'd8338761374ef6a8', '90b0d5dcf0eaf6b5', '1f1484f82a7625dd']:
-                            #     continue
-                            # if qa_datum['id'] not in ['b5cfc92181b6511b', '6ad2c846a3dbab5c', '7a158221e7c9b6eb']:
-                            #     continue
                             context = ""
                             # get sorted retrieved graph
                             all_included = []
@@ -204,7 +214,7 @@ if __name__ == "__main__":
                         total_recall_dict[setting_key] = sum(recall_list) / len(recall_list)
                         print(f"Setting: {setting_key}, Recall: {total_recall_dict[setting_key]}")
                         
-                        with open(f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_{setting_key}_sota.json", 'w') as f:
+                        with open(f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_add_reranking_passage_augmentation_70_10_2_trained_unique_augment_v2_faster.json", 'w') as f:
                             json.dump(error_cases, f, indent=4)
                 
     print(total_recall_dict)

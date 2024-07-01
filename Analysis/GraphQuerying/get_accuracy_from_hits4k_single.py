@@ -1,9 +1,19 @@
 import json
+import re
+import unicodedata
 from tqdm import tqdm
 from Algorithms.Ours.dpr.utils.tokenizers import SimpleTokenizer
 from Algorithms.Ours.dpr.data.qa_validation import has_answer
+def remove_accents_and_non_ascii(text):
+    # Normalize the text to decompose combined characters
+    normalized_text = unicodedata.normalize('NFD', text)
+    # Remove all characters that are not ASCII
+    ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
+    # Remove any remaining non-letter characters
+    cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?\-]', '', ascii_text)
+    return cleaned_text
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/output/integrated_graph_augmented_both_20_20_v12.json"
+    retrieved_graphs_path = "/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -25,9 +35,9 @@ if __name__ == "__main__":
     with open(retrieved_graphs_path, 'r') as f:
         retrieved_graphs = json.load(f)
     
-    augment_type_list = ['passage', 'both']
-    query_topk_list_1 = list(range(1,21)) #[5,4,3,2,1] 
-    augment_topk_list_1 = [1,2,3,4,5]
+    augment_type_list = ['rerank']
+    query_topk_list_1 = [10]#list(range(1,21)) #[5,4,3,2,1] 
+    augment_topk_list_1 = [2]
     total_recall_dict = {}
     tokenizer = SimpleTokenizer()
     for augment_type in augment_type_list:
@@ -47,6 +57,10 @@ if __name__ == "__main__":
             filtered_retrieval_type = ['two_node_graph_retrieval']
             query_topk_list = [1] 
             augment_topk_list = [1]
+        elif augment_type == 'rerank':
+            filtered_retrieval_type = ['two_node_graph_reranking', "passage_node_augmentation_1"]
+            query_topk_list = [10] 
+            augment_topk_list = [2]
         for query_topk in query_topk_list:
             for augment_topk in augment_topk_list:
                 error_cases = {}
@@ -62,7 +76,7 @@ if __name__ == "__main__":
                     sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
                     for node_id, node_info in sorted_retrieved_graph:
                         if node_info['type'] == 'table segment':
-                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
+                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_reranking']
                             
                             if len(linked_nodes) == 0:
                                 continue
@@ -72,7 +86,7 @@ if __name__ == "__main__":
                             chunk_id = table['chunk_id']
                             node_info['chunk_id'] = chunk_id
 
-                            if len(tokenizer.tokenize(_normalize(remove_accents_and_non_ascii(context))).words(uncased=True)) > 4096:
+                            if len(tokenizer.tokenize(remove_accents_and_non_ascii(context))) > 4096:
                                 break
 
                             if table_id not in retrieved_table_set:
@@ -98,7 +112,7 @@ if __name__ == "__main__":
                             context += two_node_graph_text
                             
                         elif node_info['type'] == 'passage':
-                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
+                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_reranking']
                             
                             if len(linked_nodes) == 0:
                                 continue
