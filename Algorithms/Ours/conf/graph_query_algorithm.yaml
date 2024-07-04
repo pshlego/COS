@@ -7,43 +7,44 @@ port: 27017
 
 # input
 qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
-two_node_graph_name: preprocess_table_graph_cos_apply_topk_edge_1
 table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
 passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
+edge_name: preprocess_table_graph_cos_apply_topk_edge_1
 
 
 # output
-integrated_graph_save_path: /mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json
-query_time_save_path: /mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster_time.json
-error_cases_save_path: /home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases_add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json
+integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/add_reranking_passage_augmentation_150_10_2_trained_v2_faster_time.json
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_cases_add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json
 
 # retriever
 ## id to chunk id
-two_node_graph_ids_path: /mnt/sde/shpark/colbert/data/index_to_chunk_id_edge_topk_1.json
-table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/table_cos_version/index_to_chunk_id.json
-passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
+edge_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json
+table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/index_to_chunk_id.json
+passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
 
 ## colbert config
-collection_two_node_graph_root_dir_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/table
-collection_table_root_dir_path: /mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage
-collection_passage_root_dir_path: /mnt/sde/shpark/colbert/data
+collection_edge_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv
+collection_table_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/collection.tsv
+collection_passage_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv
 
-two_node_graph_index_name: ottqa_edge_512_topk_1_sampled_0_0_0_5_trained
-table_index_name: ottqa_passage_to_table_segment_0_3_sampled_96_cos_version
-passage_index_name: ottqa_table_segment_to_passage_0_5_sampled_96_cos_version #ottqa_table_segment_to_passage_0_5_sampled_96_cos_version
+edge_index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
+table_index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
+passage_index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
 
-two_node_graph_index_root_path: /mnt/sdf/shpark/experiments/default/indexes
-table_index_root_path: /mnt/sdd/shpark/colbert/experiments/default/indexes
-passage_index_root_path: /mnt/sdd/shpark/colbert/experiments/default/indexes
+edge_index_name: top1_edge_embeddings_trained_w_sample_rate_0_0_0_5
+table_index_name: passage_to_table_segment_embeddings_trained_w_sample_rate_0_3_cos_version_query_len_96
+passage_index_name: table_segment_to_passage_embeddings_trained_w_sample_rate_0_5_cos_version_query_len_96
 
 nbits: 2
 
+cross_encoder_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/cross-encoder-ms-marco-MiniLM-L-6-v2/edge
 
 # experimental setting
-top_k_of_two_node_graph: 150 #500
+top_k_of_edge: 150
 top_k_of_table_augmentation: 10
 top_k_of_passage_augmentation: 0
 top_k_of_table: 0
 top_k_of_passage: 2
-node_scoring_method: max # 'min' or 'max' or 'mean'
+node_scoring_method: max
 batch_size: 512

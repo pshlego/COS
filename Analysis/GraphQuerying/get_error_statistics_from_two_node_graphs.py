@@ -146,12 +146,12 @@ if __name__ == '__main__':
     else:
         filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation', 'table_segment_node_augmentation']
         
-    error_cases_path = f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_add_reranking_passage_augmentation_200_10_2_trained.json"
+    error_cases_path = f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/table_error_cases_reranking_200_10_2_trained.json"
-    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/passage_error_cases_reranking_200_10_2_trained.json"
-    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/both_error_cases_reranking_200_10_2_trained.json"
+    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/table_error_cases_reranking_200_10_2_trained.json"
+    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/passage_error_cases_reranking_200_10_2_trained.json"
+    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/both_error_cases_reranking_200_10_2_trained.json"
     gold_graph_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
     error_qid_list = []
     

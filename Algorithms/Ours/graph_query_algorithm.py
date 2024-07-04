@@ -19,12 +19,12 @@ class GraphQueryEngine:
 
         # load dataset
         ## two node graphs
-        two_node_graph_contents = mongodb[cfg.two_node_graph_name]
-        num_of_two_node_graphs = two_node_graph_contents.count_documents({})
-        self.two_node_graph_key_to_content = {}
-        print(f"Loading {num_of_two_node_graphs} graphs...")
-        for two_node_graph_content in tqdm(two_node_graph_contents.find(), total=num_of_two_node_graphs):
-            self.two_node_graph_key_to_content[two_node_graph_content['chunk_id']] = two_node_graph_content
+        edge_contents = mongodb[cfg.edge_name]
+        num_of_edges = edge_contents.count_documents({})
+        self.edge_key_to_content = {}
+        print(f"Loading {num_of_edges} graphs...")
+        for edge_content in tqdm(edge_contents.find(), total=num_of_edges):
+            self.edge_key_to_content[edge_content['chunk_id']] = edge_content
 
         ## corpus
         print(f"Loading corpus...")
@@ -40,30 +40,23 @@ class GraphQueryEngine:
 
         # load retrievers
         ## id mappings
-        self.id_to_two_node_graph_key = json.load(open(cfg.two_node_graph_ids_path))
+        self.id_to_edge_key = json.load(open(cfg.edge_ids_path))
         self.id_to_table_key = json.load(open(cfg.table_ids_path))
         self.id_to_passage_key = json.load(open(cfg.passage_ids_path))
         
         ## colbert retrievers
-        two_node_graph_config = ColBERTConfig(root=cfg.collection_two_node_graph_root_dir_path)
-        table_config = ColBERTConfig(root=cfg.collection_table_root_dir_path)
-        passage_config = ColBERTConfig(root=cfg.collection_passage_root_dir_path)
-
-        two_node_graph_index_name = cfg.two_node_graph_index_name
-        table_index_name = cfg.table_index_name
-        passage_index_name = cfg.passage_index_name
 
         print(f"Loading index...")
-        self.colbert_two_node_graph_retriever = Searcher(index=f"{two_node_graph_index_name}.nbits{cfg.nbits}", config=two_node_graph_config, index_root=cfg.two_node_graph_index_root_path)
-        self.colbert_table_retriever = Searcher(index=f"{table_index_name}.nbits{cfg.nbits}", config=table_config, index_root=cfg.table_index_root_path)
-        self.colbert_passage_retriever = Searcher(index=f"{passage_index_name}.nbits{cfg.nbits}", config=passage_config, index_root=cfg.passage_index_root_path)
-        self.cross_encoder_two_node_graph_retriever = AutoModelForSequenceClassification.from_pretrained("/mnt/sdd/shpark/cross_encoder/training_ott_qa_cross-encoder-cross-encoder-ms-marco-MiniLM-L-6-v2-2024-06-06_02-04-26")
-        self.cross_encoder_two_node_graph_retriever.eval()
-        self.cross_encoder_two_node_graph_retriever.to(device = torch.device("cuda"))
-        self.tokenizer = AutoTokenizer.from_pretrained('cross-encoder/ms-marco-MiniLM-L-6-v2')
+        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
+        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
+        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path)
+        self.cross_encoder_edge_retriever = AutoModelForSequenceClassification.from_pretrained(cfg.cross_encoder_path)
+        self.cross_encoder_edge_retriever.eval()
+        self.cross_encoder_edge_retriever.to(device = torch.device("cuda"))
+        self.tokenizer = AutoTokenizer.from_pretrained(cfg.cross_encoder_path)
         
         # load experimental settings
-        self.top_k_of_two_node_graph = cfg.top_k_of_two_node_graph
+        self.top_k_of_edge = cfg.top_k_of_edge
         self.top_k_of_table_augmentation = cfg.top_k_of_table_augmentation
         self.top_k_of_passage_augmentation = cfg.top_k_of_passage_augmentation
         self.top_k_of_table = cfg.top_k_of_table
@@ -76,14 +69,14 @@ class GraphQueryEngine:
         for i in range(retrieval_time):
             if i == 0:
                 # 1. two-node graph retrieval
-                retrieved_two_node_graphs = self.retrieve_two_node_graphs(nl_question)
+                retrieved_edges = self.retrieve_edges(nl_question)
                 
                 # 2. Graph Integration
-                integrated_graph = self.integrate_graphs(retrieved_two_node_graphs)
+                integrated_graph = self.integrate_graphs(retrieved_edges)
                 retrieval_type = None
             else:
-                self.reranking_two_node_graphs(nl_question, integrated_graph)
-                retrieval_type = 'two_node_graph_reranking'
+                self.reranking_edges(nl_question, integrated_graph)
+                retrieval_type = 'edge_reranking'
                 self.assign_scores(integrated_graph, retrieval_type)
             
             if i < retrieval_time:
@@ -110,9 +103,9 @@ class GraphQueryEngine:
         
         return retrieved_graphs
     
-    def reranking_two_node_graphs(self, nl_question, retrieved_graphs):
-        two_node_graphs = []
-        two_node_graphs_set = set()
+    def reranking_edges(self, nl_question, retrieved_graphs):
+        edges = []
+        edges_set = set()
         for node_id, node_info in retrieved_graphs.items():
             
             if node_info['type'] == 'table segment':
@@ -127,55 +120,55 @@ class GraphQueryEngine:
                 
                 for linked_node in node_info['linked_nodes']:
                     linked_node_id = linked_node[0]
-                    two_node_graph_id = f"{node_id}_{linked_node_id}"
+                    edge_id = f"{node_id}_{linked_node_id}"
                     
-                    if two_node_graph_id not in two_node_graphs_set:
-                        two_node_graphs_set.add(two_node_graph_id)
+                    if edge_id not in edges_set:
+                        edges_set.add(edge_id)
                     else:
                         continue
                     
                     passage_text = self.passage_key_to_content[linked_node_id]['text']
                     graph_text = table_text + ' [SEP] ' + passage_text
-                    two_node_graphs.append({'table_segment_node_id': node_id, 'passage_id': linked_node_id, 'text': graph_text})
+                    edges.append({'table_segment_node_id': node_id, 'passage_id': linked_node_id, 'text': graph_text})
 
-        for i in range(0, len(two_node_graphs), self.batch_size):
-            two_node_graph_batch = two_node_graphs[i:i+self.batch_size]
-            two_node_graph_texts = [two_node_graph['text'] for two_node_graph in two_node_graph_batch]
-            nl_questions = [nl_question] * len(two_node_graph_texts)
-            two_node_graph_features = self.tokenizer(nl_questions, two_node_graph_texts, padding=True, truncation=True, return_tensors="pt").to(device = torch.device("cuda"))
+        for i in range(0, len(edges), self.batch_size):
+            edge_batch = edges[i:i+self.batch_size]
+            edge_texts = [edge['text'] for edge in edge_batch]
+            nl_questions = [nl_question] * len(edge_texts)
+            edge_features = self.tokenizer(nl_questions, edge_texts, padding=True, truncation=True, return_tensors="pt").to(device = torch.device("cuda"))
             
             with torch.no_grad():
-                two_node_graph_scores = self.cross_encoder_two_node_graph_retriever(**two_node_graph_features).logits
+                edge_scores = self.cross_encoder_edge_retriever(**edge_features).logits
             
-                for two_node_graph, score in zip(two_node_graph_batch, two_node_graph_scores):
-                    table_segment_node_id = two_node_graph['table_segment_node_id']
-                    passage_id = two_node_graph['passage_id']
+                for edge, score in zip(edge_batch, edge_scores):
+                    table_segment_node_id = edge['table_segment_node_id']
+                    passage_id = edge['passage_id']
                     reranking_score = float(score)            
-                    self.add_node(retrieved_graphs, 'table segment', table_segment_node_id, passage_id, reranking_score, 'two_node_graph_reranking')
-                    self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'two_node_graph_reranking')
+                    self.add_node(retrieved_graphs, 'table segment', table_segment_node_id, passage_id, reranking_score, 'edge_reranking')
+                    self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'edge_reranking')
         
     
-    def retrieve_two_node_graphs(self, nl_question):
-        retrieved_two_node_graphs_info = self.colbert_two_node_graph_retriever.search(nl_question, 10000)
-        retrieved_two_node_graph_id_list = retrieved_two_node_graphs_info[0]
-        retrieved_two_node_graph_score_list = retrieved_two_node_graphs_info[2]
+    def retrieve_edges(self, nl_question):
+        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
+        retrieved_edge_id_list = retrieved_edges_info[0]
+        retrieved_edge_score_list = retrieved_edges_info[2]
         
-        retrieved_two_node_graph_contents = []
-        for graphidx, retrieved_id in enumerate(retrieved_two_node_graph_id_list[:self.top_k_of_two_node_graph]):
-            retrieved_two_node_graph_content = self.two_node_graph_key_to_content[self.id_to_two_node_graph_key[str(retrieved_id)]]
+        retrieved_edge_contents = []
+        for graphidx, retrieved_id in enumerate(retrieved_edge_id_list[:self.top_k_of_edge]):
+            retrieved_edge_content = self.edge_key_to_content[self.id_to_edge_key[str(retrieved_id)]]
 
             # pass single node graph
-            if 'linked_entity_id' not in retrieved_two_node_graph_content:
+            if 'linked_entity_id' not in retrieved_edge_content:
                 continue
             
-            retrieved_two_node_graph_content['two_node_graph_score'] = retrieved_two_node_graph_score_list[graphidx]
-            retrieved_two_node_graph_contents.append(retrieved_two_node_graph_content)
+            retrieved_edge_content['edge_score'] = retrieved_edge_score_list[graphidx]
+            retrieved_edge_contents.append(retrieved_edge_content)
 
-        return retrieved_two_node_graph_contents
+        return retrieved_edge_contents
     
     def integrate_graphs(self, retrieved_graphs):
         integrated_graph = {}
-        retrieval_type='two_node_graph_retrieval'
+        retrieval_type='edge_retrieval'
         # graph integration
         for retrieved_graph_content in retrieved_graphs:
             graph_chunk_id = retrieved_graph_content['chunk_id']
@@ -189,11 +182,11 @@ class GraphQueryEngine:
             passage_id = retrieved_graph_content['linked_entity_id']
             
             # get two node graph score
-            two_node_graph_score = retrieved_graph_content['two_node_graph_score']
+            edge_score = retrieved_graph_content['edge_score']
             
             # add nodes
-            self.add_node(integrated_graph, 'table segment', table_segment_node_id, passage_id, two_node_graph_score, retrieval_type)
-            self.add_node(integrated_graph, 'passage', passage_id, table_segment_node_id, two_node_graph_score, retrieval_type)
+            self.add_node(integrated_graph, 'table segment', table_segment_node_id, passage_id, edge_score, retrieval_type)
+            self.add_node(integrated_graph, 'passage', passage_id, table_segment_node_id, edge_score, retrieval_type)
 
             # node scoring
             self.assign_scores(integrated_graph)
@@ -271,7 +264,7 @@ class GraphQueryEngine:
             # if 'score' in node_info:
             #     continue
             if retrieval_type is not None:
-                filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
+                filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
                 linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes'] if linked_node[2] not in filtered_retrieval_type]
             else:
                 linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
@@ -300,7 +293,7 @@ def get_context(retrieved_graph, graph_query_engine):
                 retrieved_table_set.add(table_id)
                 context += table['text']
         
-            max_linked_node_id, max_score, a, b, c = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
+            max_linked_node_id, max_score, a, b, c = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
 
             if max_linked_node_id in retrieved_passage_set:
                 continue
@@ -315,8 +308,8 @@ def get_context(retrieved_graph, graph_query_engine):
             row_values = table_rows[row_id+1]
             table_segment_text = column_name + '\n' + row_values
             
-            two_node_graph_text = table_segment_text + '\n' + passage_text
-            context += two_node_graph_text
+            edge_text = table_segment_text + '\n' + passage_text
+            context += edge_text
             
         elif node_info['type'] == 'passage':
             if node_id in retrieved_passage_set:
@@ -326,7 +319,7 @@ def get_context(retrieved_graph, graph_query_engine):
             passage_content = graph_query_engine.passage_key_to_content[node_id]
             passage_text = passage_content['title'] + ' ' + passage_content['text']
             #'Who created the series in which the character of Robert , played by actor Nonso Anozie , appeared ? [SEP] Nonso Anozie [SEP] Year, Title, Role, Notes [SEP] 2007, Prime Suspect 7 : The Final Act, Robert, Episode : Part 1'
-            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
+            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
             table_id = max_linked_node_id.split('_')[0]
             table = table_key_to_content[table_id]
             
@@ -340,8 +333,8 @@ def get_context(retrieved_graph, graph_query_engine):
             row_values = table_rows[row_id+1]
             table_segment_text = column_name + '\n' + row_values
             
-            two_node_graph_text = table_segment_text + '\n' + passage_text
-            context += two_node_graph_text
+            edge_text = table_segment_text + '\n' + passage_text
+            context += edge_text
 
     return context
     

@@ -15,7 +15,7 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
+    retrieved_graphs_path = "/mnt/sdd/shpark/experimental_results/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -214,7 +214,7 @@ if __name__ == "__main__":
                         total_recall_dict[setting_key] = sum(recall_list) / len(recall_list)
                         print(f"Setting: {setting_key}, Recall: {total_recall_dict[setting_key]}")
                         
-                        with open(f"/mnt/sdd/shpark/error_case_two_node_graph/error_cases_add_reranking_passage_augmentation_70_10_2_trained_unique_augment_v2_faster.json", 'w') as f:
+                        with open(f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json", 'w') as f:
                             json.dump(error_cases, f, indent=4)
                 
     print(total_recall_dict)

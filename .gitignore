@@ -133,3 +133,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 Analysis/GraphQueryResults/
+
+error_case/
