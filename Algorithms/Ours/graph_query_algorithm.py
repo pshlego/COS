@@ -7,6 +7,7 @@ from pymongo import MongoClient
 from omegaconf import DictConfig
 from ColBERT.colbert import Searcher
 from ColBERT.colbert.infra import ColBERTConfig
+from Ours.table_retriever import TableRetriever
 from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
@@ -22,16 +23,24 @@ class GraphQueryEngine:
         edge_contents = mongodb[cfg.edge_name]
         num_of_edges = edge_contents.count_documents({})
         self.edge_key_to_content = {}
+        self.table_key_to_edge_keys = {}
         print(f"Loading {num_of_edges} graphs...")
-        for edge_content in tqdm(edge_contents.find(), total=num_of_edges):
+        for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
             self.edge_key_to_content[edge_content['chunk_id']] = edge_content
+            
+            if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
+                self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
 
+            self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
+            
         ## corpus
         print(f"Loading corpus...")
         self.table_key_to_content = {}
+        self.table_title_to_table_key = {}
         table_contents = json.load(open(cfg.table_data_path))
         for table_key, table_content in enumerate(table_contents):
             self.table_key_to_content[str(table_key)] = table_content
+            self.table_title_to_table_key[table_content['chunk_id']] = table_key
         
         self.passage_key_to_content = {}
         passage_contents = json.load(open(cfg.passage_data_path))
@@ -44,8 +53,11 @@ class GraphQueryEngine:
         self.id_to_table_key = json.load(open(cfg.table_ids_path))
         self.id_to_passage_key = json.load(open(cfg.passage_ids_path))
         
+        ## table retriever
+        print(f"Loading table retriever...")
+        self.table_retriever = TableRetriever(cfg)
+        
         ## colbert retrievers
-
         print(f"Loading index...")
         self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
         self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
@@ -56,25 +68,28 @@ class GraphQueryEngine:
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.cross_encoder_path)
         
         # load experimental settings
-        self.top_k_of_edge = cfg.top_k_of_edge
-        self.top_k_of_table_augmentation = cfg.top_k_of_table_augmentation
-        self.top_k_of_passage_augmentation = cfg.top_k_of_passage_augmentation
         self.top_k_of_table = cfg.top_k_of_table
+        self.top_k_of_edge = cfg.top_k_of_edge
+        self.top_k_of_table_segment_augmentation = cfg.top_k_of_table_segment_augmentation
+        self.top_k_of_passage_augmentation = cfg.top_k_of_passage_augmentation
+        self.top_k_of_table_segment = cfg.top_k_of_table_segment
         self.top_k_of_passage = cfg.top_k_of_passage
 
         self.node_scoring_method = cfg.node_scoring_method
         self.batch_size = cfg.batch_size
 
     def query(self, nl_question, retrieval_time = 2):
+        # 0. Table Retrieval
+        deleted_edge_keys = self.retrieve_tables(nl_question)
+        
+        # 1. Edge Retrieval
+        retrieved_edges = self.retrieve_edges(nl_question, deleted_edge_keys)
+        
+        # 2. Graph Integration
+        integrated_graph = self.integrate_graphs(retrieved_edges)
+        retrieval_type = None
+        
         for i in range(retrieval_time):
-            if i == 0:
-                # 1. Edge Retrieval
-                retrieved_edges = self.retrieve_edges(nl_question)
-                
-                # 2. Graph Integration
-                integrated_graph = self.integrate_graphs(retrieved_edges)
-                retrieval_type = None
-            
             # 3. Edge Reranking
             self.reranking_edges(nl_question, integrated_graph)
             retrieval_type = 'edge_reranking'
@@ -89,7 +104,7 @@ class GraphQueryEngine:
                     elif node_info['type'] == 'passage':
                         topk_passage_nodes.append([node_id, node_info['score']])
 
-                topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_augmentation]
+                topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_segment_augmentation]
                 topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
                 
                 # 3.1 Passage Node Augmentation
@@ -102,6 +117,37 @@ class GraphQueryEngine:
         
         return retrieved_graphs
     
+    def retrieve_tables(self, nl_question):
+        retrieved_tables = self.table_retriever.retrieve(nl_question, self.top_k_of_table)
+        
+        preserved_edge_keys = []
+        
+        for retrieved_table in retrieved_tables:
+            table_key = self.table_title_to_table_key[retrieved_table['title']]
+            preserved_edge_keys.extend(self.table_key_to_edge_keys[str(table_key)])
+        
+        deleted_edge_keys = torch.tensor(list(set(range(len(self.edge_key_to_content))) - set(preserved_edge_keys)), dtype=torch.int32).to("cuda")
+        
+        return deleted_edge_keys
+        
+    def retrieve_edges(self, nl_question, deleted_edge_keys):
+        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 20000, filter_fn=filter_fn, pid_deleted_list=deleted_edge_keys)
+        retrieved_edge_id_list = retrieved_edges_info[0]
+        retrieved_edge_score_list = retrieved_edges_info[2]
+        
+        retrieved_edge_contents = []
+        for graphidx, retrieved_id in enumerate(retrieved_edge_id_list[:self.top_k_of_edge]):
+            retrieved_edge_content = self.edge_key_to_content[self.id_to_edge_key[str(retrieved_id)]]
+
+            # pass single node graph
+            if 'linked_entity_id' not in retrieved_edge_content:
+                continue
+            
+            retrieved_edge_content['edge_score'] = retrieved_edge_score_list[graphidx]
+            retrieved_edge_contents.append(retrieved_edge_content)
+
+        return retrieved_edge_contents
+
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
@@ -154,25 +200,6 @@ class GraphQueryEngine:
                     reranking_score = float(score)            
                     self.add_node(retrieved_graphs, 'table segment', table_segment_node_id, passage_id, reranking_score, 'edge_reranking')
                     self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'edge_reranking')
-        
-    
-    def retrieve_edges(self, nl_question):
-        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
-        retrieved_edge_id_list = retrieved_edges_info[0]
-        retrieved_edge_score_list = retrieved_edges_info[2]
-        
-        retrieved_edge_contents = []
-        for graphidx, retrieved_id in enumerate(retrieved_edge_id_list[:self.top_k_of_edge]):
-            retrieved_edge_content = self.edge_key_to_content[self.id_to_edge_key[str(retrieved_id)]]
-
-            # pass single node graph
-            if 'linked_entity_id' not in retrieved_edge_content:
-                continue
-            
-            retrieved_edge_content['edge_score'] = retrieved_edge_score_list[graphidx]
-            retrieved_edge_contents.append(retrieved_edge_content)
-
-        return retrieved_edge_contents
     
     def integrate_graphs(self, retrieved_graphs):
         integrated_graph = {}
@@ -214,7 +241,7 @@ class GraphQueryEngine:
                 retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 20)
                 retrieved_id_list = retrieved_node_info[0]
                 retrieved_score_list = retrieved_node_info[2]
-                top_k = self.top_k_of_table
+                top_k = self.top_k_of_table_segment
 
             for target_rank, retrieved_id in enumerate(retrieved_id_list):
                 if target_rank >= top_k:
@@ -227,15 +254,8 @@ class GraphQueryEngine:
                     retrieved_node_id = self.id_to_table_key[str(retrieved_id)]
                     augment_type = f'table_segment_node_augmentation_{retrieval_time}'
                 
-                # if retrieval_time > 0 and retrieved_node_id in graph:
-                #     retrieval_type_list = [linked_node[2] for linked_node in graph[retrieved_node_id]['linked_nodes'] if 'augmentation' in linked_node[2] and query_node_id == linked_node[0]]
-                #     if len(retrieval_type_list) > 0:
-                #         top_k += 1
-                
                 self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, augment_type, source_rank, target_rank)
                 self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, augment_type, target_rank, source_rank)
-
-
 
     def get_expanded_query(self, nl_question, node_id, query_node_type):
         if query_node_type == 'table segment':
@@ -268,9 +288,6 @@ class GraphQueryEngine:
     
     def assign_scores(self, graph, retrieval_type = None):
         for node_id, node_info in graph.items():
-
-            # if 'score' in node_info:
-            #     continue
             if retrieval_type is not None:
                 filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
                 linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes'] if linked_node[2] not in filtered_retrieval_type]
@@ -285,7 +302,10 @@ class GraphQueryEngine:
                 node_score = sum(linked_scores) / len(linked_scores)
             
             graph[node_id]['score'] = node_score
-            
+
+def filter_fn(pid, values_to_remove):
+    return pid[~torch.isin(pid, values_to_remove)].to("cuda")
+
 def get_context(retrieved_graph, graph_query_engine):
     context = ""
     retrieved_table_set = set()
@@ -392,5 +412,6 @@ def main(cfg: DictConfig):
     json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
     json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
     # json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
+
 if __name__ == "__main__":
     main()

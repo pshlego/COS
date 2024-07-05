@@ -26,17 +26,17 @@ class TableRetriever:
         self.gpu_index_flat = gpu_index_flat
         self.doc_ids = doc_ids
         
-    def retrieve(self, query):
+    def retrieve(self, query, top_k=10):
         expert_id = None
         if self.cfg.encoder.use_moe:
             expert_id = 0
 
         questions_tensor = generate_question_vectors(self.encoder, self.tensorizer,
-            [query], self.cfg.batch_size, expert_id=expert_id, mean_pool=self.cfg.mean_pool
+            [query], self.cfg.batch_size, expert_id=expert_id, mean_pool=self.cfg.mean_pool, silence=True
         )
         
         retrieved_results = []
-        k = self.cfg.top_k_of_full_table   
+        k = top_k
         D, I = self.gpu_index_flat.search(questions_tensor.cpu().numpy(), k)
         for j, ind in enumerate(I):
             retrieved_tables = [self.doc_ids[idx].replace('ott-original:_', '').strip() if 'ott-original:' in self.doc_ids[idx] else self.doc_ids[idx].replace('ott-wiki:_', '').strip() for idx in ind]
