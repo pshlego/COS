@@ -68,16 +68,17 @@ class GraphQueryEngine:
     def query(self, nl_question, retrieval_time = 2):
         for i in range(retrieval_time):
             if i == 0:
-                # 1. two-node graph retrieval
+                # 1. Edge Retrieval
                 retrieved_edges = self.retrieve_edges(nl_question)
                 
                 # 2. Graph Integration
                 integrated_graph = self.integrate_graphs(retrieved_edges)
                 retrieval_type = None
-            else:
-                self.reranking_edges(nl_question, integrated_graph)
-                retrieval_type = 'edge_reranking'
-                self.assign_scores(integrated_graph, retrieval_type)
+            
+            # 3. Edge Reranking
+            self.reranking_edges(nl_question, integrated_graph)
+            retrieval_type = 'edge_reranking'
+            self.assign_scores(integrated_graph, retrieval_type)
             
             if i < retrieval_time:
                 topk_table_segment_nodes = []
@@ -96,8 +97,6 @@ class GraphQueryEngine:
                 
                 # 3.2 Table Segment Node Augmentation
                 self.augment_node(integrated_graph, nl_question, topk_passage_nodes, 'passage', 'table segment', i)
-                
-                self.assign_scores(integrated_graph, retrieval_type)
             
             retrieved_graphs = integrated_graph
         
@@ -118,7 +117,16 @@ class GraphQueryEngine:
                 row_values = table_rows[row_id+1]
                 table_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
                 
+                # prevent reranking twice
+                reranked_edge_list = []
                 for linked_node in node_info['linked_nodes']:
+                    if linked_node[2] == 'edge_reranking':
+                        reranked_edge_list.append(linked_node[0])
+                
+                for linked_node in node_info['linked_nodes']:
+                    if linked_node[0] in reranked_edge_list:
+                        continue
+                    
                     linked_node_id = linked_node[0]
                     edge_id = f"{node_id}_{linked_node_id}"
                     

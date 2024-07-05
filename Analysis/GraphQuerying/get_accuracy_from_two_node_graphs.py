@@ -14,8 +14,27 @@ def remove_accents_and_non_ascii(text):
     cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?\-]', '', ascii_text)
     return cleaned_text
 
+def assign_scores(graph, retrieval_type = "None"):
+    for node_id, node_info in graph.items():
+
+        # if 'score' in node_info:
+        #     continue
+        if retrieval_type is not None:
+            filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
+            linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes'] if linked_node[2] not in filtered_retrieval_type]
+        else:
+            linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
+        node_score = max(linked_scores)
+        # if node_scoring_method == 'min':
+        #     node_score = min(linked_scores)
+        # elif node_scoring_method == 'max':
+        #     node_score = max(linked_scores)
+        # elif node_scoring_method == 'mean':
+        #     node_score = sum(linked_scores) / len(linked_scores)
+        
+        graph[node_id]['score'] = node_score
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/experimental_results/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
+    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_original_reranker.json"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_w_original_reranker.json"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_finetuned_reranker.json"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_finetuned_reranker.json"#"/mnt/sdd/shpark/experimental_results/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -47,29 +66,29 @@ if __name__ == "__main__":
     #error_cases = {}
     for augment_type in augment_type_list:
         if augment_type == 'both':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation', 'passage_node_augmentation_1']
+            filtered_retrieval_type = ['edge_retrieval', 'table_segment_node_augmentation', 'passage_node_augmentation_1']
             passage_query_topk_list_1 = passage_query_topk_list_1
             passage_augment_topk_list_1 = passage_augment_topk_list_1
             table_query_topk_list_1 = table_query_topk_list_1
             table_augment_topk_list_1 = table_augment_topk_list_1
         elif augment_type == 'table':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation']
+            filtered_retrieval_type = ['edge_retrieval', 'table_segment_node_augmentation']
             passage_query_topk_list_1 = passage_query_topk_list_1
             passage_augment_topk_list_1 = passage_augment_topk_list_1
             table_query_topk_list_1 = table_query_topk_list_1
             table_augment_topk_list_1 = table_augment_topk_list_1
         elif augment_type == 'passage':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation_1']
+            filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_1']
             passage_query_topk_list_1 = passage_query_topk_list_1
             passage_augment_topk_list_1 = passage_augment_topk_list_1
             table_query_topk_list_1 = table_query_topk_list_1
             table_augment_topk_list_1 = table_augment_topk_list_1
         elif augment_type == 'none':
-            filtered_retrieval_type = ['two_node_graph_retrieval']
+            filtered_retrieval_type = ['edge_retrieval']
             query_topk_list = [1] 
             augment_topk_list = [1]
         elif augment_type == 'rerank':
-            filtered_retrieval_type = ['two_node_graph_reranking', "passage_node_augmentation_1"]
+            filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1"]
             query_topk_list = [10] 
             augment_topk_list = [2]
 
@@ -91,9 +110,9 @@ if __name__ == "__main__":
                                 #     passage_augment_topk = 1                    
 
                                 if node_info['type'] == 'table segment':
-                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < passage_query_topk) and (x[4] < passage_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < table_query_topk) and (x[3] < table_augment_topk)) or x[2] == 'two_node_graph_reranking']
+                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < passage_query_topk) and (x[4] < passage_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < table_query_topk) and (x[3] < table_augment_topk)) or x[2] == 'edge_reranking']
                                 elif node_info['type'] == 'passage':
-                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < table_query_topk) and (x[4] < table_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < passage_query_topk) and (x[3] < passage_augment_topk)) or x[2] == 'two_node_graph_reranking']
+                                    linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < table_query_topk) and (x[4] < table_augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < passage_query_topk) and (x[3] < passage_augment_topk)) or x[2] == 'edge_reranking']
                                 
                                 if len(linked_nodes) == 0:
                                     continue
@@ -112,7 +131,7 @@ if __name__ == "__main__":
                         # for revised_retrieved_graph, qa_datum in zip(retrieved_graphs, qa_dataset):
                             # if qa_datum['id'] != 'e01c6b4a614d2d38':
                             #     continue
-                            two_node_graph_count = 0
+                            edge_count = 0
                             answers = qa_datum['answers']
                             context = ""
                             # get sorted retrieved graph
@@ -132,13 +151,13 @@ if __name__ == "__main__":
                                     if table_id not in retrieved_table_set:
                                         retrieved_table_set.add(table_id)
                                         
-                                        if two_node_graph_count == 50:
+                                        if edge_count == 50:
                                             continue
                                         
                                         context += table['text']
-                                        two_node_graph_count += 1
+                                        edge_count += 1
                                         
-                                    max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
+                                    max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
                                     
                                     if max_linked_node_id in retrieved_passage_set:
                                         continue
@@ -153,29 +172,29 @@ if __name__ == "__main__":
                                     row_values = table_rows[row_id+1]
                                     table_segment_text = column_name + '\n' + row_values
                                     
-                                    two_node_graph_text = table_segment_text + '\n' + passage_text
+                                    edge_text = table_segment_text + '\n' + passage_text
                                     
-                                    if two_node_graph_count == 50:
+                                    if edge_count == 50:
                                         continue
                                     
-                                    two_node_graph_count += 1
-                                    context += two_node_graph_text
+                                    edge_count += 1
+                                    context += edge_text
                                     
                                 elif node_info['type'] == 'passage':
 
                                     if node_id in retrieved_passage_set:
                                         continue
 
-                                    max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
+                                    max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
                                     table_id = max_linked_node_id.split('_')[0]
                                     table = table_key_to_content[table_id]
                                     
                                     if table_id not in retrieved_table_set:
                                         retrieved_table_set.add(table_id)
-                                        if two_node_graph_count == 50:
+                                        if edge_count == 50:
                                             continue
                                         context += table['text']
-                                        two_node_graph_count += 1
+                                        edge_count += 1
 
                                     row_id = int(max_linked_node_id.split('_')[1])
                                     table_rows = table['text'].split('\n')
@@ -183,16 +202,16 @@ if __name__ == "__main__":
                                     row_values = table_rows[row_id+1]
                                     table_segment_text = column_name + '\n' + row_values
                                     
-                                    if two_node_graph_count == 50:
+                                    if edge_count == 50:
                                         continue
 
                                     retrieved_passage_set.add(node_id)
                                     passage_content = passage_key_to_content[node_id]
                                     passage_text = passage_content['title'] + ' ' + passage_content['text']
                                     
-                                    two_node_graph_text = table_segment_text + '\n' + passage_text
-                                    context += two_node_graph_text
-                                    two_node_graph_count += 1
+                                    edge_text = table_segment_text + '\n' + passage_text
+                                    context += edge_text
+                                    edge_count += 1
                             
                             normalized_context = remove_accents_and_non_ascii(context)
                             normalized_answers = [remove_accents_and_non_ascii(answer) for answer in answers]
@@ -214,11 +233,11 @@ if __name__ == "__main__":
                         total_recall_dict[setting_key] = sum(recall_list) / len(recall_list)
                         print(f"Setting: {setting_key}, Recall: {total_recall_dict[setting_key]}")
                         
-                        with open(f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json", 'w') as f:
+                        with open(f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking_original.json", 'w') as f:
                             json.dump(error_cases, f, indent=4)
                 
     print(total_recall_dict)
     print(max(list(total_recall_dict.values())))
-    with open("/mnt/sdd/shpark/error_case_two_node_graph/different_parameter.json", 'w') as f:
+    with open("/mnt/sdd/shpark/error_case_edge/different_parameter.json", 'w') as f:
         json.dump(total_recall_dict, f, indent=4)
         
