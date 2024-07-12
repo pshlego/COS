@@ -15,7 +15,7 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
+    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/baai_rerank_full_layer_wo_table_retrieval.json"#"/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
@@ -45,23 +45,23 @@ if __name__ == "__main__":
     #error_cases = {}
     for augment_type in augment_type_list:
         if augment_type == 'both':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation', 'passage_node_augmentation']
+            filtered_retrieval_type = ['edge_retrieval', 'table_segment_node_augmentation', 'passage_node_augmentation']
             query_topk_list = query_topk_list_1
             augment_topk_list = augment_topk_list_1
         elif augment_type == 'table':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'table_segment_node_augmentation']
+            filtered_retrieval_type = ['edge_retrieval', 'table_segment_node_augmentation']
             query_topk_list = query_topk_list_1
             augment_topk_list = augment_topk_list_1
         elif augment_type == 'passage':
-            filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation']
+            filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation']
             query_topk_list = query_topk_list_1 
             augment_topk_list = augment_topk_list_1
         elif augment_type == 'none':
-            filtered_retrieval_type = ['two_node_graph_retrieval']
+            filtered_retrieval_type = ['edge_retrieval']
             query_topk_list = [1] 
             augment_topk_list = [1]
         elif augment_type == 'rerank':
-            filtered_retrieval_type = ['two_node_graph_reranking', "passage_node_augmentation_1"]
+            filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1"]
             query_topk_list = [10] 
             augment_topk_list = [2]
         for query_topk in query_topk_list:
@@ -74,9 +74,9 @@ if __name__ == "__main__":
                     revised_retrieved_graph = {}
                     for node_id, node_info in retrieved_graph.items():
                         if node_info['type'] == 'table segment':
-                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_reranking']
+                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'edge_reranking']
                         elif node_info['type'] == 'passage':
-                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_reranking']
+                            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'edge_reranking']
                         
                         if len(linked_nodes) == 0:
                             continue
@@ -91,7 +91,7 @@ if __name__ == "__main__":
                     revised_retrieved_graphs.append(revised_retrieved_graph)
                 for revised_retrieved_graph, qa_datum in tqdm(zip(revised_retrieved_graphs, qa_dataset), total=len(qa_dataset)):
                     cos_format_result = copy.deepcopy(qa_datum)
-                    two_node_graph_count = 0
+                    edge_count = 0
                     answers = qa_datum['answers']
 
                     # get sorted retrieved graph
@@ -111,7 +111,7 @@ if __name__ == "__main__":
                             if table_id not in retrieved_table_set:
                                 retrieved_table_set.add(table_id)
                                 
-                                if two_node_graph_count == 50:
+                                if edge_count == 50:
                                     continue
                                 
                                 # normalized_context = remove_accents_and_non_ascii(table['text'])
@@ -120,9 +120,9 @@ if __name__ == "__main__":
                                 
                                 all_included.append({'id': chunk_id, 'title': table['title'], 'text': table['text']})
                                 
-                                two_node_graph_count += 1
+                                edge_count += 1
                                 
-                            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
+                            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
                             
                             if max_linked_node_id in retrieved_passage_set:
                                 continue
@@ -137,16 +137,16 @@ if __name__ == "__main__":
                             row_values = table_rows[row_id+1]
                             table_segment_text = column_name + '\n' + row_values
                             
-                            two_node_graph_text = table_segment_text + '\n' + passage_text
+                            edge_text = table_segment_text + '\n' + passage_text
                             
-                            if two_node_graph_count == 50:
+                            if edge_count == 50:
                                 continue
                             
-                            all_included.append({'id': chunk_id, 'title': table['title'], 'text': two_node_graph_text})
-                            two_node_graph_count += 1
+                            all_included.append({'id': chunk_id, 'title': table['title'], 'text': edge_text})
+                            edge_count += 1
                             
                         elif node_info['type'] == 'passage':
-                            # linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'two_node_graph_retrieval']
+                            # linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'edge_retrieval']
                             
                             # if len(linked_nodes) == 0:
                             #     continue
@@ -154,16 +154,16 @@ if __name__ == "__main__":
                             if node_id in retrieved_passage_set:
                                 continue
 
-                            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'two_node_graph_retrieval', 0, 0))
+                            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
                             table_id = max_linked_node_id.split('_')[0]
                             table = table_key_to_content[table_id]
                             
                             if table_id not in retrieved_table_set:
                                 retrieved_table_set.add(table_id)
-                                if two_node_graph_count == 50:
+                                if edge_count == 50:
                                     continue
                                 all_included.append({'id': chunk_id, 'title': table['title'], 'text': table['text']})
-                                two_node_graph_count += 1
+                                edge_count += 1
 
                             row_id = int(max_linked_node_id.split('_')[1])
                             table_rows = table['text'].split('\n')
@@ -171,20 +171,20 @@ if __name__ == "__main__":
                             row_values = table_rows[row_id+1]
                             table_segment_text = column_name + '\n' + row_values
                             
-                            if two_node_graph_count == 50:
+                            if edge_count == 50:
                                 continue
 
                             retrieved_passage_set.add(node_id)
                             passage_content = passage_key_to_content[node_id]
                             passage_text = passage_content['title'] + ' ' + passage_content['text']
                             
-                            two_node_graph_text = table_segment_text + '\n' + passage_text
-                            all_included.append({'id': chunk_id, 'title': table['title'], 'text': two_node_graph_text})
-                            two_node_graph_count += 1
+                            edge_text = table_segment_text + '\n' + passage_text
+                            all_included.append({'id': chunk_id, 'title': table['title'], 'text': edge_text})
+                            edge_count += 1
                     
                     cos_format_result['ctxs'] = all_included
                     cos_format_results.append(cos_format_result)
                 
-                with open(f"/mnt/sdd/shpark/output/reranking_150_10_2.json", 'w') as f:
+                with open(f"/mnt/sdd/shpark/experimental_results/output/cos_format_baai_rerank_full_layer_wo_table_retrieval.json", 'w') as f:
                     json.dump(cos_format_results, f, indent=4)
         

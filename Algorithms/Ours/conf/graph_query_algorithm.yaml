@@ -4,18 +4,17 @@ username: root
 password: 1234
 port: 27017
 
-
 # input
 qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
 table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
 passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 edge_name: preprocess_table_graph_cos_apply_topk_edge_1
-
+deleted_pids_path: #/mnt/sdd/shpark/colbert/data/deleted_pids/topk_2.json
 
 # output
-integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/add_table_retriever.json
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/add_table_retriever_time.json
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_case_add_table_retriever.json
+integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/baai_rerank_full_layer_first_wo_finetune.json
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/baai_rerank_full_layer_first_wo_finetune_time.json
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_case_baai_rerank_full_layer_first_wo_finetune.json
 
 # retriever
 ## id to chunk id
@@ -24,7 +23,7 @@ table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_c
 passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
 
 ## colbert config
-collection_edge_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv
+collection_edge_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv #/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv
 collection_table_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/collection.tsv
 collection_passage_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv
 
@@ -41,7 +40,7 @@ nbits: 2
 cross_encoder_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/cross-encoder-ms-marco-MiniLM-L-6-v2/edge
 
 # experimental setting
-top_k_of_table: 2000
+top_k_of_table: 400
 top_k_of_edge: 150
 top_k_of_table_segment_augmentation: 10
 top_k_of_passage_augmentation: 0

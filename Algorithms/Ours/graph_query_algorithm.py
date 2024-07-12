@@ -11,6 +11,7 @@ from Ours.table_retriever import TableRetriever
 from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from FlagEmbedding import LayerWiseFlagLLMReranker
 
 class GraphQueryEngine:
     def __init__(self, cfg):
@@ -62,10 +63,7 @@ class GraphQueryEngine:
         self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
         self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
         self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path)
-        self.cross_encoder_edge_retriever = AutoModelForSequenceClassification.from_pretrained(cfg.cross_encoder_path)
-        self.cross_encoder_edge_retriever.eval()
-        self.cross_encoder_edge_retriever.to(device = torch.device("cuda"))
-        self.tokenizer = AutoTokenizer.from_pretrained(cfg.cross_encoder_path)
+        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("BAAI/bge-reranker-v2-minicpm-layerwise", use_fp16=True)
         
         # load experimental settings
         self.top_k_of_table = cfg.top_k_of_table
@@ -79,21 +77,19 @@ class GraphQueryEngine:
         self.batch_size = cfg.batch_size
 
     def query(self, nl_question, retrieval_time = 2):
-        # 0. Table Retrieval
-        deleted_edge_keys = self.retrieve_tables(nl_question)
         
         # 1. Edge Retrieval
-        retrieved_edges = self.retrieve_edges(nl_question, deleted_edge_keys)
+        retrieved_edges = self.retrieve_edges(nl_question)
         
         # 2. Graph Integration
         integrated_graph = self.integrate_graphs(retrieved_edges)
         retrieval_type = None
         
         for i in range(retrieval_time):
-            # 3. Edge Reranking
-            self.reranking_edges(nl_question, integrated_graph)
-            retrieval_type = 'edge_reranking'
-            self.assign_scores(integrated_graph, retrieval_type)
+            if i >= 1:
+                self.reranking_edges(nl_question, integrated_graph)
+                retrieval_type = 'edge_reranking'
+                self.assign_scores(integrated_graph, retrieval_type)
             
             if i < retrieval_time:
                 topk_table_segment_nodes = []
@@ -112,26 +108,17 @@ class GraphQueryEngine:
                 
                 # 3.2 Table Segment Node Augmentation
                 self.augment_node(integrated_graph, nl_question, topk_passage_nodes, 'passage', 'table segment', i)
-            
+                
+                self.assign_scores(integrated_graph, retrieval_type)
+
             retrieved_graphs = integrated_graph
         
         return retrieved_graphs
     
-    def retrieve_tables(self, nl_question):
-        retrieved_tables = self.table_retriever.retrieve(nl_question, self.top_k_of_table)
+    def retrieve_edges(self, nl_question):
         
-        preserved_edge_keys = []
+        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
         
-        for retrieved_table in retrieved_tables:
-            table_key = self.table_title_to_table_key[retrieved_table['title']]
-            preserved_edge_keys.extend(self.table_key_to_edge_keys[str(table_key)])
-        
-        deleted_edge_keys = torch.tensor(list(set(range(len(self.edge_key_to_content))) - set(preserved_edge_keys)), dtype=torch.int32).to("cuda")
-        
-        return deleted_edge_keys
-        
-    def retrieve_edges(self, nl_question, deleted_edge_keys):
-        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 20000, filter_fn=filter_fn, pid_deleted_list=deleted_edge_keys)
         retrieved_edge_id_list = retrieved_edges_info[0]
         retrieved_edge_score_list = retrieved_edges_info[2]
         
@@ -162,16 +149,8 @@ class GraphQueryEngine:
                 column_names = table_rows[0]
                 row_values = table_rows[row_id+1]
                 table_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
-                
-                # prevent reranking twice
-                reranked_edge_list = []
+
                 for linked_node in node_info['linked_nodes']:
-                    if linked_node[2] == 'edge_reranking':
-                        reranked_edge_list.append(linked_node[0])
-                
-                for linked_node in node_info['linked_nodes']:
-                    if linked_node[0] in reranked_edge_list:
-                        continue
                     
                     linked_node_id = linked_node[0]
                     edge_id = f"{node_id}_{linked_node_id}"
@@ -187,12 +166,9 @@ class GraphQueryEngine:
 
         for i in range(0, len(edges), self.batch_size):
             edge_batch = edges[i:i+self.batch_size]
-            edge_texts = [edge['text'] for edge in edge_batch]
-            nl_questions = [nl_question] * len(edge_texts)
-            edge_features = self.tokenizer(nl_questions, edge_texts, padding=True, truncation=True, return_tensors="pt").to(device = torch.device("cuda"))
-            
+            model_input = [[nl_question, edge['text']] for edge in edge_batch]
             with torch.no_grad():
-                edge_scores = self.cross_encoder_edge_retriever(**edge_features).logits
+                edge_scores = self.cross_encoder_edge_retriever.compute_score(model_input, batch_size=200, cutoff_layers=[40], max_length=256)
             
                 for edge, score in zip(edge_batch, edge_scores):
                     table_segment_node_id = edge['table_segment_node_id']

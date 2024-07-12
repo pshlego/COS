@@ -140,20 +140,26 @@ if __name__ == '__main__':
     elif filter_type == 'table':
         filtered_retrieval_type = ['edge_retrieval', 'table_segment_node_augmentation']
     elif filter_type == 'passage':
-        filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation', 'edge_reranking']
+        filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_1', 'edge_reranking']
     elif filter_type == 'rerank':
         filtered_retrieval_type = ['edge_reranking', 'passage_node_augmentation_1']
     else:
-        filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation', 'table_segment_node_augmentation']
+        filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_1', 'table_segment_node_augmentation']
         
-    error_cases_path = f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"
+    error_cases_path = f"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_full_layer_wo_table_retrieval.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json" #f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"#"/mnt/sdd/shpark/experimental_results/error_case_edge/error_cases_passage_10_2_v2_100.json"#"/mnt/sdd/shpark/experimental_results/error_case_edge/error_cases_none_1_1_v2.json" #f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"
+    data_graph_error_cases_path = "/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_rerank_full_layer_wo_table_retrieval.json" #"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_reranker.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_reranker.json"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/table_error_cases_reranking_200_10_2_trained.json"
-    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/passage_error_cases_reranking_200_10_2_trained.json"
-    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/both_error_cases_reranking_200_10_2_trained.json"
+    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/full_table_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
+    table_segment_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/table_segment_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
+    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/passage_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
+    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/both_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
     gold_graph_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
     error_qid_list = []
+    
+    # with open(data_graph_error_cases_path, 'r') as f:
+    #     data_graph_error_cases = json.load(f)
+    # data_graph_error_case_id_list = set([datum['id'] for datum in data_graph_error_cases])
     
     table_segment_id_to_linked_passages = json.load(open(gold_graph_path))
     retrieval_error_cases = json.load(open(error_cases_path))
@@ -170,20 +176,25 @@ if __name__ == '__main__':
     
     tokenizer = SimpleTokenizer()
     
-    error_case = {'table_none':0, 'passage_none':0, 'both_none':0}
+    error_case = {'table_none':0, 'table_segment_none':0, 'passage_none':0, 'both_none':0}
     passage_error_cases = {}
     table_error_cases = {}
+    table_segment_error_cases = {}
     both_error_cases = {}
     for qid, retrieval_error_case in tqdm(retrieval_error_cases.items()):
+        # if qid not in data_graph_error_case_id_list:
+        #     continue
         answers = retrieval_error_case['answers']
         question = retrieval_error_case['question']
         positive_ctxs = retrieval_error_case['positive_ctxs']
         positive_table_segments = set()
         raw_positive_table_segments = set()
         positive_passages = set()
+        positive_tables = set()
         for positive_ctx in positive_ctxs:
             chunk_id = positive_ctx['chunk_id']
             chunk_rows = positive_ctx['rows']
+            positive_tables.add(chunk_id)
             for answer_node in positive_ctx['answer_node']:
                 row_id = answer_node[1][0]
                 chunk_row_id = chunk_rows.index(row_id)
@@ -213,38 +224,53 @@ if __name__ == '__main__':
         
         error_qid_list.append(qid)
         table_exist = False
+        table_segment_exist = False
         passage_exist = False
         for node_id, retrieved_node_info in sorted_retrieved_graph[:final_node_rank]:
             if len(retrieved_node_info['linked_nodes']) == 0:
                 continue
             
             if retrieved_node_info['type'] == 'table segment' and not table_exist:
+                chunk_id = retrieved_node_info['chunk_id']
+                if chunk_id in positive_tables:
+                    table_exist = True
+            
+            if retrieved_node_info['type'] == 'table segment' and not table_segment_exist:
                 row_id = node_id.split('_')[1]
                 chunk_id = retrieved_node_info['chunk_id']
                 retrieved_table_segment_id = f"{chunk_id}_{row_id}"
                 if retrieved_table_segment_id in positive_table_segments:
-                    table_exist = True
+                    table_segment_exist = True
             
             if retrieved_node_info['type'] == 'passage' and not passage_exist:
                 if node_id in positive_passages or len(positive_passages) == 0:
                     passage_exist = True
             
-        if table_exist and not passage_exist:
+        if not table_exist and not passage_exist:
+            error_case['both_none'] += 1
+            both_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
+        elif table_exist and not table_segment_exist:
+            error_case['table_segment_none'] += 1
+            table_segment_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
+        elif table_segment_exist and not passage_exist:
             error_case['passage_none'] += 1
             passage_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
         elif passage_exist and not table_exist:
             error_case['table_none'] += 1
             table_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
-        elif not table_exist and not passage_exist:
-            error_case['both_none'] += 1
-            both_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
+        # elif not table_segment_exist and not passage_exist:
+        #     error_case['both_none'] += 1
+        #     both_error_cases[qid] = {'answer': answers, 'question': question, 'positive_ctxs': positive_ctxs, 'positive_table_segments': list(positive_table_segments), 'positive_passages':list(positive_passages),'retrieved_graph': retrieval_error_case['retrieved_graph'], 'sorted_retrieved_graph':sorted_retrieved_graph, 'final_node_rank': final_node_rank}
         else:
             print('error')
 
     print(error_case)
-    
+
     with open(table_error_case_result_path, 'w') as f:
         json.dump(table_error_cases, f)
+
+    with open(table_segment_error_case_result_path, 'w') as f:
+        json.dump(table_segment_error_cases, f)
     
     with open(passage_error_case_result_path, 'w') as f:
         json.dump(passage_error_cases, f)
