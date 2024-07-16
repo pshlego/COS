@@ -15,7 +15,7 @@ export PATH=~/miniconda3/bin/:$PATH
 conda init bash
 
 # Clone git
-git clone https://github.com/pshlego/COS.git
+git clone https://github.com/pshlego/OTT_QA_Workspace.git
 
 
 # Download requirments
