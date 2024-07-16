@@ -1,19 +1,35 @@
 import json
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-
-path = "/home/shpark/OTT_QA_Workspace/error_case/both_error_cases_reranking_200_10_2_trained.json"
-
-cross_encoder_two_node_graph_retriever = AutoModelForSequenceClassification.from_pretrained('cross-encoder/ms-marco-MiniLM-L-6-v2')#("/mnt/sdd/shpark/cross_encoder/training_ott_qa_cross-encoder-cross-encoder-ms-marco-MiniLM-L-6-v2-2024-06-06_02-04-26")
-cross_encoder_two_node_graph_retriever.eval()
-cross_encoder_two_node_graph_retriever.to(device = torch.device("cuda"))
-tokenizer = AutoTokenizer.from_pretrained('cross-encoder/ms-marco-MiniLM-L-6-v2')
+import FlagEmbedding.llm_reranker.finetune_for_layerwise.run
+path = "/home/shpark/OTT_QA_Workspace/error_case/both_error_cases_reranking_last_in_data_graph_baai_rerank_full_layer_wo_table_retrieval_error.json"
 
 with open(path, "r") as f:
     data = json.load(f)
 
-
+count = 0
+rank_dict = {}
 for qid, datum in data.items():
-    two_node_graph_features = tokenizer([datum['question']], [""], padding=True, truncation=True, return_tensors="pt").to(device = torch.device("cuda"))
-    two_node_graph_scores = cross_encoder_two_node_graph_retriever(**two_node_graph_features).logits
-    print(datum['positive_ctxs'][0]['text'])
+    positive_table_chunk = set('_'.join(positive_table_segment.split('_')[:-1]) for positive_table_segment in datum['positive_table_segments'])
+    retrieved_table_chunk = set([node['chunk_id'] for node_id, node in datum['retrieved_graph'].items() if node['type'] == 'table segment'])
+    if len(positive_table_chunk.intersection(retrieved_table_chunk)) == 0:
+        count += 1
+    else:
+        sorted_retrieved_graph = sorted(datum['retrieved_graph'].items(), key=lambda x: x[1]['score'], reverse=True)
+        node_list = []
+        for node_id, node_info in sorted_retrieved_graph:
+            if node_info['type'] == 'table segment':
+                node_list.append(node_info['chunk_id'])
+            else:
+                node_list.append(node_id)
+        rank = node_list.index(list(positive_table_chunk.intersection(retrieved_table_chunk))[0]) - len(datum['sorted_retrieved_graph'])
+        if rank not in rank_dict:
+            rank_dict[rank] = 1
+        else:
+            rank_dict[rank] += 1
+    
+    # #'List_of_Bomberman_video_games_8_2' in [node['chunk_id'] for node_id, node in datum['retrieved_graph'].items() if node['type'] == 'table segment']
+    # print(datum['positive_ctxs'][0]['text'])
+print(count)
+print(rank_dict)
+print(len(data))

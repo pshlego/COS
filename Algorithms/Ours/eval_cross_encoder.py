@@ -33,10 +33,10 @@ from FlagEmbedding import LayerWiseFlagLLMReranker, FlagReranker
 # We set num_labels=1, which predicts a continuous score between 0 and 1
 # model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 # model = CrossEncoder(model_name, num_labels=1, max_length=512)
-# model_name = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_Reranker"
-# model = LayerWiseFlagLLMReranker(model_name, use_fp16=True)
-model_name = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/slm_reranker_baai/checkpoint-6000"
-model = FlagReranker(model_name, use_fp16=True)
+model_name = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400"
+model = LayerWiseFlagLLMReranker(model_name, use_fp16=True)
+# model_name = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/slm_reranker_baai/checkpoint-6000"
+# model = FlagReranker(model_name, use_fp16=True)
 dev_corpus = {}
 dev_collection_filepath = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Development_Dataset/edge/collection.tsv"
 with open(dev_collection_filepath, "r", encoding="utf8") as fIn:

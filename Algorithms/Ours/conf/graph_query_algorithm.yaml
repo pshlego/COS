@@ -9,12 +9,12 @@ qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_
 table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
 passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 edge_name: preprocess_table_graph_cos_apply_topk_edge_1
-deleted_pids_path: #/mnt/sdd/shpark/colbert/data/deleted_pids/topk_2.json
+entity_linking_result_name: table_chunks_to_passages_cos_table_passage
 
 # output
-integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/baai_rerank_full_layer_first_wo_finetune.json
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/baai_rerank_full_layer_first_wo_finetune_time.json
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_case_baai_rerank_full_layer_first_wo_finetune.json
+integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/llm.json
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/llm_time.json
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_case_llm.json
 
 # retriever
 ## id to chunk id
@@ -38,14 +38,15 @@ passage_index_name: table_segment_to_passage_embeddings_trained_w_sample_rate_0_
 nbits: 2
 
 cross_encoder_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/cross-encoder-ms-marco-MiniLM-L-6-v2/edge
+llm_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ
 
 # experimental setting
-top_k_of_table: 400
 top_k_of_edge: 150
 top_k_of_table_segment_augmentation: 10
 top_k_of_passage_augmentation: 0
 top_k_of_table_segment: 0
 top_k_of_passage: 2
+top_k_of_table_select_w_llm: 3
 node_scoring_method: max
 batch_size: 512
 

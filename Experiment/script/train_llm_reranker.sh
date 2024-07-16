@@ -1,11 +1,11 @@
-export CUDA_VISIBLE_DEVICES=0,1,3
+export CUDA_VISIBLE_DEVICES=0,2,3
 torchrun --nproc_per_node 3 \
 -m FlagEmbedding.llm_reranker.finetune_for_layerwise.run \
---output_dir /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/reranker-baai \
+--output_dir /mnt/sdd/shpark/reranker/reranker-baai-15-negatives-96 \
 --model_name_or_path BAAI/bge-reranker-v2-minicpm-layerwise \
---train_data /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge.jsonl \
+--train_data /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives_llm.jsonl \
 --learning_rate 2e-4 \
---num_train_epochs 1 \
+--num_train_epochs 2 \
 --per_device_train_batch_size 1 \
 --gradient_accumulation_steps 32 \
 --dataloader_drop_last True \
