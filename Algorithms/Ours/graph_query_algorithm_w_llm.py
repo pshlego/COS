@@ -188,6 +188,13 @@ class GraphQueryEngine:
         self.batch_size = cfg.batch_size
 
 
+
+
+
+
+
+
+
     #############################################################################
     # Query                                                                     #
     # Input: NL Question                                                        #
@@ -243,7 +250,7 @@ class GraphQueryEngine:
                 
                 selected_table_segment_list = self.select_table_segments(nl_question, table_key_to_augmented_nodes)
 
-                #delete node which from selected tables
+                # delete node which from selected tables
                 if len(selected_table_segment_list) > 0:
                     self.delete_nodes(integrated_graph, deleted_node_id_list)
                 else:
@@ -258,8 +265,17 @@ class GraphQueryEngine:
     
     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #############################################################################
-    # Retrieve edges                                                            #
+    # RetrieveEdges                                                             #
     # Input: NL Question                                                        #
     # Output: Retrieved Edges                                                   #
     # ------------------------------------------------------------------------- #
@@ -286,17 +302,58 @@ class GraphQueryEngine:
 
         return retrieved_edge_contents
 
+    #############################################################################
+    # IntegrateGraphs                                                           #
+    # Input: retrieved_graphs                                                   #
+    # Output: integrated_graph with scores assigned to each node                #
+    # ------------------------------------------------------------------------- #
+    # Integrate `retrieved_graphs`(list of edges relevant to the NL question)   #
+    # into `self.graph`, a dictionary containing the information about the      #
+    # nodes, via addNode function.                                              #
+    # The nodes are assigned scores via `assign_scores` function.               #
+    #############################################################################
+    def integrate_graphs(self, retrieved_graphs):
+        integrated_graph = {}
+        retrieval_type = 'edge_retrieval'
+        # graph integration
+        for retrieved_graph_content in retrieved_graphs:
+            graph_chunk_id = retrieved_graph_content['chunk_id']
+
+            # get table segment node info
+            table_key = str(retrieved_graph_content['table_id'])
+            row_id = graph_chunk_id.split('_')[1]
+            table_segment_node_id = f"{table_key}_{row_id}"
+            
+            # get passage node info
+            passage_id = retrieved_graph_content['linked_entity_id']
+            
+            # get two node graph score
+            edge_score = retrieved_graph_content['edge_score']
+            
+            # add nodes
+            self.add_node(integrated_graph, 'table segment', table_segment_node_id, passage_id, edge_score, retrieval_type)
+            self.add_node(integrated_graph, 'passage', passage_id, table_segment_node_id, edge_score, retrieval_type)
+
+            # node scoring
+            self.assign_scores(integrated_graph)
+
+        return integrated_graph
+
+
 
     #############################################################################
     # Reranking Edges                                                           #
     # Input: NL Question                                                        #
-    # InOut: Retrieved Graphs                                                   #
+    # InOut: Retrieved Graphs - actually just any `graph`                       #
     # ------------------------------------------------------------------------- #
-    # Rerank edges in the retrieved graphs using the cross-encoder.             #
+    # Recalculate scores for edges in the `retrieved_graphs` using the cross    #
+    # encoder edge reranker.                                                    #
+    # The scores are assigned via `addNode` function.                           #
     #############################################################################
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
+        
         for node_id, node_info in retrieved_graphs.items():
             
             if node_info['type'] == 'table segment':
@@ -324,10 +381,10 @@ class GraphQueryEngine:
                     edges.append({'table_segment_node_id': node_id, 'passage_id': linked_node_id, 'text': graph_text})
 
         for i in range(0, len(edges), self.batch_size):
-            edge_batch = edges[i:i+self.batch_size]
+            edge_batch = edges[i : i + self.batch_size]
             model_input = [[nl_question, edge['text']] for edge in edge_batch]
             with torch.no_grad():
-                edge_scores = self.cross_encoder_edge_retriever.compute_score(model_input, batch_size=200, cutoff_layers=[40], max_length=256)
+                edge_scores = self.cross_encoder_edge_retriever.compute_score(model_input, batch_size = 200, cutoff_layers = [40], max_length = 256)
             
                 for edge, score in zip(edge_batch, edge_scores):
                     table_segment_node_id = edge['table_segment_node_id']
@@ -339,12 +396,172 @@ class GraphQueryEngine:
     
     
     #############################################################################
+    # AssignScores                                                              #
+    # InOut: graph                                                              #
+    # Input: retrieval_type (default = None)                                    #
+    # ------------------------------------------------------------------------- #
+    # Assign scores to the nodes in the graph using weights of the edges        #
+    # connected to each node                                                    #
+    #  - min: minimum score of the linked nodes                                 #
+    #  - max: maximum score of the linked nodes                                 #
+    #  - mean: mean score of the linked nodes                                   #
+    # The score is assigned in graph[node_id]["score"]                          #
+    #############################################################################
+    def assign_scores(self, graph, retrieval_type = None):
+        for node_id, node_info in graph.items():
+            if retrieval_type is not None:
+                filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
+                linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes'] if linked_node[2] not in filtered_retrieval_type]
+            else:
+                linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
+            
+            if self.node_scoring_method == 'min':
+                node_score = min(linked_scores)
+            elif self.node_scoring_method == 'max':
+                node_score = max(linked_scores)
+            elif self.node_scoring_method == 'mean':
+                node_score = sum(linked_scores) / len(linked_scores)
+            
+            graph[node_id]['score'] = node_score
+    
+    
+    
+    
+    #############################################################################
+    # AugmentNode                                                               #
+    # InOut: graph                                                              #
+    # Input: nl_question                                                        #
+    # Input: topk_query_nodes (`k` nodes which show the highest scores)         #
+    # Input: query_node_type                                                    #
+    # Input: retrieved_node_type                                                #
+    # Input: retrieval_time                                                     #
+    # ------------------------------------------------------------------------- #
+    # ???
+    #############################################################################
+    def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
+        
+        for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
+            
+            expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
+            
+            if query_node_type == 'table segment':
+                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 20)
+                retrieved_id_list = retrieved_node_info[0]
+                # retrieved_score_list = retrieved_node_info[2]
+                top_k = self.top_k_of_passage
+            else:
+                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 20)
+                retrieved_id_list = retrieved_node_info[0]
+                # retrieved_score_list = retrieved_node_info[2]
+                top_k = self.top_k_of_table_segment
+
+            for target_rank, retrieved_id in enumerate(retrieved_id_list):
+                if target_rank >= top_k:
+                    break
+                
+                if query_node_type == 'table segment':
+                    retrieved_node_id = self.id_to_passage_key[str(retrieved_id)]
+                    augment_type = f'passage_node_augmentation_{retrieval_time}'
+                else:
+                    retrieved_node_id = self.id_to_table_key[str(retrieved_id)]
+                    augment_type = f'table_segment_node_augmentation_{retrieval_time}'
+                
+                self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, augment_type, source_rank, target_rank)
+                self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, augment_type, target_rank, source_rank)
+    
+    
+    #############################################################################
+    # getExpandedQuery                                                          #
+    # Input: nl_question                                                        #
+    # Input: node_id                                                            #
+    # Input: query_node_type                                                    #
+    # Output: expanded_query                                                    #
+    # ------------------------------------------------------------------------- #
+    # generate an expanded query (string to query) using the information of the #
+    # node (either can be table segment or passage).                            #
+    #############################################################################
+    def get_expanded_query(self, nl_question, node_id, query_node_type):
+        if query_node_type == 'table segment':
+            table_key = node_id.split('_')[0]
+            table = self.table_key_to_content[table_key]
+            table_title = table['title']
+            
+            row_id = int(node_id.split('_')[1])
+            table_rows = table['text'].split('\n')
+            column_name = table_rows[0]
+            row_values = table_rows[row_id+1]
+            
+            expanded_query = f"{nl_question} [SEP] {table_title} [SEP] {column_name} [SEP] {row_values}"
+        else:
+            passage = self.passage_key_to_content[node_id]
+            passage_title = passage['title']
+            passage_text = passage['text']
+            
+            expanded_query = f"{nl_question} [SEP] {passage_title} [SEP] {passage_text}"
+        
+        return expanded_query
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #############################################################################
+    # getTable                                                                  #
+    # Input: retrieved_graph                                                    #
+    # Output: table_key_list                                                    #
+    # Output: node_id_list                                                      #
+    # Output: table_key_to_augmented_nodes                                      #
+    # ------------------------------------------------------------------------- #
+    # Using the retrieved_graph, get the tables according to the scores of the  #
+    # table segment-typed nodes.                                                #
+    # Sorted in the reveresed order of the scores, aggregate the original table #
+    # node of what were the table segment nodes.                                #
+    #############################################################################
+    def get_table(self, retrieved_graph):
+        sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
+        
+        table_key_list = []
+        node_id_list = []
+        table_key_to_augmented_nodes = {}
+        for node_id, node_info in sorted_retrieved_graph:
+            if node_info['type'] == 'table segment' and len(table_key_list) <= self.top_k_of_table_select_w_llm:
+                table_key = node_id.split('_')[0]
+                if table_key not in table_key_list:
+                    table_key_list.append(table_key)
+                    table_key_to_augmented_nodes[table_key] = {}
+                
+                table_key_to_augmented_nodes[table_key][node_id.split('_')[-1]] = [node_info[0] for node_info in node_info['linked_nodes'] if 'augmentation' in node_info[2]]
+                
+            if node_info['type'] == 'table segment' and node_id.split('_')[0] in table_key_list:
+                node_id_list.append(node_id)
+
+        return table_key_list, node_id_list, table_key_to_augmented_nodes
+    
+    
+    #############################################################################
     # SelectTableSegments                                                       #
     # Input: NL Question                                                        #
     # InOut: table_key_to_augmented_nodes                                       #
     # ------------------------------------------------------------------------- #
-    # Select table segments from the retrieved graphs using the large language  #
-    # model.                                                                    #
+    # ???
     #############################################################################
     def select_table_segments(self, nl_question, table_key_to_augmented_nodes):
         prompt_list = []
@@ -431,7 +648,30 @@ class GraphQueryEngine:
         return selected_table_segment_list
     
     
-    
+    #############################################################################
+    # getTableAndLinkedPassages                                                 #
+    # Input: table_info                                                         #
+    # Input: row_id_to_linked_passage_contents                                  #
+    # Output: table_and_linked_passages                                         #
+    # ------------------------------------------------------------------------- #
+    # ???
+    #############################################################################
+    def get_table_and_linked_passages(self, table_info, row_id_to_linked_passage_contents):
+        table_and_linked_passages = ""
+        table_and_linked_passages += f"Table Name: {table_info['title']}\n"
+        table_and_linked_passages += f"Column Name: {table_info['column_name'].replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n\n"
+        for row_id, row_content in enumerate(table_info['rows']):
+            table_and_linked_passages += f"Row_{row_id + 1}: {row_content.replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n"
+            if str(row_id) in row_id_to_linked_passage_contents:
+                table_and_linked_passages += f"Passages linked to Row_{row_id + 1}:\n"
+                for linked_passage in list(set(row_id_to_linked_passage_contents[str(row_id)])):
+                    tokenized_content = self.tokenizer.encode(linked_passage)
+                    trimmed_tokenized_content = tokenized_content[:96]
+                    trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
+                    table_and_linked_passages += f"- {trimmed_content}\n"
+            table_and_linked_passages += "\n\n"
+
+        return table_and_linked_passages
     
     
     #############################################################################
@@ -440,7 +680,7 @@ class GraphQueryEngine:
     # Input: selected_table_segment_list                                        #
     # Input: integrated_graph                                                   #
     # ------------------------------------------------------------------------- #
-    # Select passages from the retrieved graphs using the large language model. #
+    # ???
     #############################################################################
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         prompt_list = []
@@ -509,62 +749,59 @@ class GraphQueryEngine:
                 self.add_node(integrated_graph, 'table segment', table_segment_node_id, selected_passage_id, 1000000, 'llm_based_selection')
                 self.add_node(integrated_graph, 'passage', selected_passage_id, table_segment_node_id, 1000000, 'llm_based_selection')
     
-    def integrate_graphs(self, retrieved_graphs):
-        integrated_graph = {}
-        retrieval_type='edge_retrieval'
-        # graph integration
-        for retrieved_graph_content in retrieved_graphs:
-            graph_chunk_id = retrieved_graph_content['chunk_id']
 
-            # get table segment node info
-            table_key = str(retrieved_graph_content['table_id'])
-            row_id = graph_chunk_id.split('_')[1]
-            table_segment_node_id = f"{table_key}_{row_id}"
+    
+        
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #############################################################################
+    # AddNode                                                                   #
+    # InOut: graph                                                              #
+    # Input: source_node_type                                                   #
+    # Input: source_node_id                                                     #
+    # Input: score                                                              #
+    # Input: retrieval_type                                                     #
+    # Input: source_rank (default = 0)                                          #
+    # Input: target_rank (default = 0)                                          # 
+    # ------------------------------------------------------------------------- #
+    # `graph` is a dictionary in which its key becomes a source node id and     #
+    # its value is a dictionary containing the information about the nodes      #
+    # linked to the source node.                                                #
+    #   `type`: type of the source node (table segment | passage)               #
+    #   `linked_nodes`: a list of linked nodes to the source node. Each linked  #
+    #                   node is a list containing                               #
+    #                       - target node id                                    #
+    #                       - score                                             #
+    #                       - retrieval type                                    #
+    #                       - source rank                                       #
+    #                       - target rank                                       #
+    #############################################################################
+    def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type, source_rank = 0, target_rank = 0):
+        # add source and target node
+        if source_node_id not in graph:
+            graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type, source_rank, target_rank]]}
+        # add target node
+        else:
+            graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
             
-            # get passage node info
-            passage_id = retrieved_graph_content['linked_entity_id']
-            
-            # get two node graph score
-            edge_score = retrieved_graph_content['edge_score']
-            
-            # add nodes
-            self.add_node(integrated_graph, 'table segment', table_segment_node_id, passage_id, edge_score, retrieval_type)
-            self.add_node(integrated_graph, 'passage', passage_id, table_segment_node_id, edge_score, retrieval_type)
-
-            # node scoring
-            self.assign_scores(integrated_graph)
-
-        return integrated_graph
-
-    def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
-        for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
-            expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
-            
-            if query_node_type == 'table segment':
-                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 20)
-                retrieved_id_list = retrieved_node_info[0]
-                retrieved_score_list = retrieved_node_info[2]
-                top_k = self.top_k_of_passage
-            else:
-                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 20)
-                retrieved_id_list = retrieved_node_info[0]
-                retrieved_score_list = retrieved_node_info[2]
-                top_k = self.top_k_of_table_segment
-
-            for target_rank, retrieved_id in enumerate(retrieved_id_list):
-                if target_rank >= top_k:
-                    break
-                
-                if query_node_type == 'table segment':
-                    retrieved_node_id = self.id_to_passage_key[str(retrieved_id)]
-                    augment_type = f'passage_node_augmentation_{retrieval_time}'
-                else:
-                    retrieved_node_id = self.id_to_table_key[str(retrieved_id)]
-                    augment_type = f'table_segment_node_augmentation_{retrieval_time}'
-                
-                self.add_node(graph, query_node_type, query_node_id, retrieved_node_id, query_node_score, augment_type, source_rank, target_rank)
-                self.add_node(graph, retrieved_node_type, retrieved_node_id, query_node_id, query_node_score, augment_type, target_rank, source_rank)
-
+    #############################################################################
+    # DeleteNodes                                                               #
+    # InOut: graph                                                              #
+    # Input: node_list                                                          #
+    # ------------------------------------------------------------------------- #
+    # ???
+    #############################################################################
     def delete_nodes(self, graph, node_list):
         # Convert node_list to a set for O(1) average time complexity lookups
         node_set = set(node_list)
@@ -583,65 +820,11 @@ class GraphQueryEngine:
         # Delete nodes that are not linked to any other node
         for node_id in nodes_to_delete:
             del graph[node_id]
-        
-    def get_expanded_query(self, nl_question, node_id, query_node_type):
-        if query_node_type == 'table segment':
-            table_key = node_id.split('_')[0]
-            table = self.table_key_to_content[table_key]
-            table_title = table['title']
-            
-            row_id = int(node_id.split('_')[1])
-            table_rows = table['text'].split('\n')
-            column_name = table_rows[0]
-            row_values = table_rows[row_id+1]
-            
-            expanded_query = f"{nl_question} [SEP] {table_title} [SEP] {column_name} [SEP] {row_values}"
-        else:
-            passage = self.passage_key_to_content[node_id]
-            passage_title = passage['title']
-            passage_text = passage['text']
-            
-            expanded_query = f"{nl_question} [SEP] {passage_title} [SEP] {passage_text}"
-        
-        return expanded_query
-
-    def get_table(self, retrieved_graph):
-        sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
-        
-        table_key_list = []
-        node_id_list = []
-        table_key_to_augmented_nodes = {}
-        for node_id, node_info in sorted_retrieved_graph:
-            if node_info['type'] == 'table segment' and len(table_key_list) <= self.top_k_of_table_select_w_llm:
-                table_key = node_id.split('_')[0]
-                if table_key not in table_key_list:
-                    table_key_list.append(table_key)
-                    table_key_to_augmented_nodes[table_key] = {}
-                
-                table_key_to_augmented_nodes[table_key][node_id.split('_')[-1]] = [node_info[0] for node_info in node_info['linked_nodes'] if 'augmentation' in node_info[2]]
-                
-            if node_info['type'] == 'table segment' and node_id.split('_')[0] in table_key_list:
-                node_id_list.append(node_id)
-
-        return table_key_list, node_id_list, table_key_to_augmented_nodes
     
-    def get_table_and_linked_passages(self, table_info, row_id_to_linked_passage_contents):
-        table_and_linked_passages = ""
-        table_and_linked_passages += f"Table Name: {table_info['title']}\n"
-        table_and_linked_passages += f"Column Name: {table_info['column_name'].replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n\n"
-        for row_id, row_content in enumerate(table_info['rows']):
-            table_and_linked_passages += f"Row_{row_id + 1}: {row_content.replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n"
-            if str(row_id) in row_id_to_linked_passage_contents:
-                table_and_linked_passages += f"Passages linked to Row_{row_id + 1}:\n"
-                for linked_passage in list(set(row_id_to_linked_passage_contents[str(row_id)])):
-                    tokenized_content = self.tokenizer.encode(linked_passage)
-                    trimmed_tokenized_content = tokenized_content[:96]
-                    trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
-                    table_and_linked_passages += f"- {trimmed_content}\n"
-            table_and_linked_passages += "\n\n"
-
-        return table_and_linked_passages
-
+    
+    #############################################################################
+    # GetPrompt                                                                 #
+    #############################################################################
     def get_prompt(self, contents_for_prompt):
         if 'linked_passages' in contents_for_prompt:
             prompt = self.select_passage_prompt.format(**contents_for_prompt)
@@ -650,34 +833,10 @@ class GraphQueryEngine:
         
         return prompt
     
-    def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type, source_rank=0, target_rank=0):
-        # add source and target node
-        if source_node_id not in graph:
-            graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type, source_rank, target_rank]]}
-        # add target node
-        else:
-            graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
     
-    def assign_scores(self, graph, retrieval_type = None):
-        for node_id, node_info in graph.items():
-            if retrieval_type is not None:
-                filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
-                linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes'] if linked_node[2] not in filtered_retrieval_type]
-            else:
-                linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
-            
-            if self.node_scoring_method == 'min':
-                node_score = min(linked_scores)
-            elif self.node_scoring_method == 'max':
-                node_score = max(linked_scores)
-            elif self.node_scoring_method == 'mean':
-                node_score = sum(linked_scores) / len(linked_scores)
-            
-            graph[node_id]['score'] = node_score
-
-
-
-
+    
+    
+    
 
 
 
