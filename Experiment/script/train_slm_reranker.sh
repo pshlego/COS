@@ -1,9 +1,9 @@
 export CUDA_VISIBLE_DEVICES=0,1
 torchrun --nproc_per_node 2 \
 -m FlagEmbedding.reranker.run \
---output_dir /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/slm_reranker_baai_epoch5 \
+--output_dir /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/slm_reranker_baai_epoch5 \
 --model_name_or_path BAAI/bge-reranker-v2-m3 \
---train_data /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives.jsonl \
+--train_data /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives.jsonl \
 --learning_rate 6e-5 \
 --fp16 \
 --num_train_epochs 5 \

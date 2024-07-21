@@ -1,21 +1,21 @@
 import json
 
-# with open('/home/shpark/OTT_QA_Workspace/passage_error_cases_passage_10_2_short.json', 'r') as f:
+# with open('/root/OTT_QA_Workspace/passage_error_cases_passage_10_2_short.json', 'r') as f:
 #     passage_error_cases_passage_10_2 = json.load(f)
 
-with open('/home/shpark/OTT_QA_Workspace/passage_error_cases_passage_10_2.json', 'r') as f:
+with open('/root/OTT_QA_Workspace/passage_error_cases_passage_10_2.json', 'r') as f:
     passage_error_cases_passage_10_2 = json.load(f)
 
-# with open('/home/shpark/OTT_QA_Workspace/both_error_cases_passage_10_2_short.json', 'r') as f:
+# with open('/root/OTT_QA_Workspace/both_error_cases_passage_10_2_short.json', 'r') as f:
 #     both_error_cases_passage_10_2 = json.load(f)
 
-# with open('/home/shpark/OTT_QA_Workspace/both_error_cases_passage_10_2.json', 'r') as f:
+# with open('/root/OTT_QA_Workspace/both_error_cases_passage_10_2.json', 'r') as f:
 #     both_error_cases_passage_10_2_original = json.load(f)
 
-# with open('/home/shpark/OTT_QA_Workspace/table_error_cases_passage_10_2_short.json', 'r') as f:
+# with open('/root/OTT_QA_Workspace/table_error_cases_passage_10_2_short.json', 'r') as f:
 #     table_error_cases_passage_10_2 = json.load(f)
 
-with open('/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases.json', 'r') as f:
+with open('/root/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases.json', 'r') as f:
     data_graph_error_cases = json.load(f)
 
 error_case_wo_data_graph_errors = list(set(passage_error_cases_passage_10_2.keys())-set([data_graph_error_case['id'] for data_graph_error_case in data_graph_error_cases]))

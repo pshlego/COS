@@ -129,11 +129,11 @@ def remove_accents_and_non_ascii(text):
     cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?\-]', '', ascii_text)
     return cleaned_text
 
-short_path = '/home/shpark/OTT_QA_Workspace/both_error_cases_passage_10_2_short.json'
+short_path = '/root/OTT_QA_Workspace/both_error_cases_passage_10_2_short.json'
 original_path = '/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json'
-qa_dataset_path=  "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
-table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+qa_dataset_path=  "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
+table_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+passage_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
 short_data = json.load(open(short_path))
 original_data = json.load(open(original_path))
 qa_dataset = json.load(open(qa_dataset_path))

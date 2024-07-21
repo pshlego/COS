@@ -135,10 +135,10 @@ if __name__ == '__main__':
         filtered_retrieval_type = ['two_node_graph_retrieval', 'passage_node_augmentation', 'table_segment_node_augmentation']
     
     error_cases_path = f"/mnt/sdd/shpark/error_case_analysis_results/error_cases_{filter_type}_{query_topk}_{augment_topk}_v2.json"
-    table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-    passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    error_case_statistics_result_path = "/home/shpark/OTT_QA_Workspace/error_cases_passage_4_1.json"
-    gold_graph_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
+    table_data_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+    passage_data_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    error_case_statistics_result_path = "/root/OTT_QA_Workspace/error_cases_passage_4_1.json"
+    gold_graph_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
     error_qid_list = []
     
     table_segment_id_to_linked_passages = json.load(open(gold_graph_path))

@@ -14,10 +14,10 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 if __name__ == "__main__":
     retrieved_graphs_path = "/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
-    table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-    passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
-    qa_dataset_path=  "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
+    table_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+    passage_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    passage_ids_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
+    qa_dataset_path=  "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
     qa_dataset = json.load(open(qa_dataset_path))
     qa_dataset = qa_dataset
     print(f"Loading corpus...")

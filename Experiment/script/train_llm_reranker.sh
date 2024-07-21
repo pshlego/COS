@@ -3,7 +3,7 @@ torchrun --nproc_per_node 3 \
 -m FlagEmbedding.llm_reranker.finetune_for_layerwise.run \
 --output_dir /mnt/sdd/shpark/reranker/reranker-baai-15-negatives-96 \
 --model_name_or_path BAAI/bge-reranker-v2-minicpm-layerwise \
---train_data /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives_llm.jsonl \
+--train_data /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives_llm.jsonl \
 --learning_rate 2e-4 \
 --num_train_epochs 2 \
 --per_device_train_batch_size 1 \
@@ -17,7 +17,7 @@ torchrun --nproc_per_node 3 \
 --save_total_limit 50 \
 --ddp_find_unused_parameters False \
 --gradient_checkpointing \
---deepspeed /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/stage1.json \
+--deepspeed /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/stage1.json \
 --warmup_ratio 0.1 \
 --bf16 \
 --use_lora True \

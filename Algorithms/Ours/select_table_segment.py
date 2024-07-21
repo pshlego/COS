@@ -68,11 +68,11 @@ def convert_table_to_text(table_info, row_id_to_linked_passages, tokenizer):
     return table_and_linked_passages
 
 if __name__ == "__main__":
-    model_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ"
-    table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-    passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    generated_data_graph_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/table_chunks_to_passages_cos_table_passage.json"
-    path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/table_segment_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
+    model_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ"
+    table_data_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+    passage_data_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    generated_data_graph_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/table_chunks_to_passages_cos_table_passage.json"
+    path = "/root/OTT_QA_Workspace/error_case/error_case_1/table_segment_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
     
     # MongoDB Connection Setup
     username = "root"

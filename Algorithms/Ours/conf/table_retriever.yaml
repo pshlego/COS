@@ -13,13 +13,13 @@ indexers:
     _target_: dpr.indexer.faiss_indexers.DenseHNSWSQIndexer
 
 # the name of the queries dataset from the 'datasets' config group
-qa_dataset: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
+qa_dataset: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
 
 # a list of names of the passages datasets from the 'ctx_sources' config group
-ctx_datatsets: [/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json,/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json,[/mnt/sdf/OTT-QAMountSpace/Dataset/COS/EntityLinkingResults_GivenByAuthor/table_chunks_to_passages*]]
+ctx_datatsets: [/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json,/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json,[/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/EntityLinkingResults_GivenByAuthor/table_chunks_to_passages*]]
 
 #Glob paths to encoded passages (from generate_dense_embeddings tool)
-encoded_ctx_files: [/mnt/sdf/OTT-QAMountSpace/Embeddings/COS/ott_table_original*]
+encoded_ctx_files: [/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Embeddings/COS/ott_table_original*]
 
 out_file:
 # "regex" or "string"
@@ -59,7 +59,7 @@ kilt_out_file:
 table_chunk_file:
 label_question: False
 # A trained bi-encoder checkpoint file to initialize the model
-model_file: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/COS/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+model_file: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/COS/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
 
 validate_as_tables: False
 rpc_retriever_cfg_file:

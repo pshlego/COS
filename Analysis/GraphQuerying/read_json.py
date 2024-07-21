@@ -2,7 +2,7 @@ import json
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import FlagEmbedding.llm_reranker.finetune_for_layerwise.run
-path = "/home/shpark/OTT_QA_Workspace/error_case/both_error_cases_reranking_last_in_data_graph_baai_rerank_full_layer_wo_table_retrieval_error.json"
+path = "/root/OTT_QA_Workspace/error_case/both_error_cases_reranking_last_in_data_graph_baai_rerank_full_layer_wo_table_retrieval_error.json"
 
 with open(path, "r") as f:
     data = json.load(f)

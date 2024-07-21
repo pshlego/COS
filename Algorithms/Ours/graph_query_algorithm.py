@@ -8,31 +8,100 @@ from omegaconf import DictConfig
 from ColBERT.colbert import Searcher
 from ColBERT.colbert.infra import ColBERTConfig
 from Ours.table_retriever import TableRetriever
-from Ours.dpr.data.qa_validation import has_answer
-from Ours.dpr.utils.tokenizers import SimpleTokenizer
+# from Ours.dpr.data.qa_validation import has_answer
+# from Ours.dpr.utils.tokenizers import SimpleTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from FlagEmbedding import LayerWiseFlagLLMReranker
+
+
+
+@hydra.main(config_path="conf", config_name="graph_query_algorithm")
+def main(cfg: DictConfig):
+    # load qa dataset
+    print(f"Loading qa dataset...")
+    qa_dataset = json.load(open(cfg.qa_dataset_path))
+    graph_query_engine = GraphQueryEngine(cfg)
+    # tokenizer = SimpleTokenizer()
+    
+    # query
+    print(f"Start querying...")
+    recall_list = []
+    error_cases = []
+    query_time_list = []
+    retrieved_query_list = []
+    for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
+        
+        nl_question = qa_datum['question']
+        answers = qa_datum['answers']
+        
+        init_time = time.time()
+        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
+        end_time = time.time()
+        query_time_list.append(end_time - init_time)
+        
+        # context = get_context(retrieved_graph, graph_query_engine)
+        # is_has_answer = has_answer(answers, context, tokenizer, 'string', max_length=4096)
+
+        # if is_has_answer:
+        #     recall_list.append(1)
+        # else:
+        #     qa_datum['retrieved_graph'] = retrieved_graph
+        #     if  "hard_negative_ctxs" in qa_datum:
+        #         del qa_datum["hard_negative_ctxs"]
+        #     error_cases.append(qa_datum)
+        #     recall_list.append(0)
+        
+        retrieved_query_list.append(retrieved_graph)
+
+    # print(f"HITS4K: {sum(recall_list) / len(recall_list)}")
+    # print(f"Average query time: {sum(query_time_list) / len(query_time_list)}")
+    
+    # save integrated graph
+    print(f"Saving integrated graph...")
+    json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
+    json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
+    # json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
+    
+
 
 class GraphQueryEngine:
     def __init__(self, cfg):
         # mongodb setup
-        client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
-        mongodb = client[cfg.dbname]
+        # client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
+        # mongodb = client[cfg.dbname]
 
         # load dataset
         ## two node graphs
-        edge_contents = mongodb[cfg.edge_name]
-        num_of_edges = edge_contents.count_documents({})
+        # edge_contents = mongodb[cfg.edge_name]
+        # num_of_edges = edge_contents.count_documents({})
+        
+        
+        edge_contents = []
+        with open(cfg.edge_dataset_path, "r") as file:
+            for line in file:
+                edge_contents.append(json.loads(line))
+        num_of_edges = len(edge_contents)
+            
         self.edge_key_to_content = {}
         self.table_key_to_edge_keys = {}
         print(f"Loading {num_of_edges} graphs...")
-        for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
+        
+        # for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
+        #     self.edge_key_to_content[edge_content['chunk_id']] = edge_content
+        #   
+        #     if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
+        #         self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
+        #
+        #     self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
+        #
+        # Translate the upper to one not using mongodb
+        for id, edge_content in enumerate(edge_contents):
             self.edge_key_to_content[edge_content['chunk_id']] = edge_content
             
             if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
                 self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
-
-            self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
+            
+            self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id) 
             
         ## corpus
         print(f"Loading corpus...")
@@ -53,20 +122,20 @@ class GraphQueryEngine:
         self.id_to_edge_key = json.load(open(cfg.edge_ids_path))
         self.id_to_table_key = json.load(open(cfg.table_ids_path))
         self.id_to_passage_key = json.load(open(cfg.passage_ids_path))
-        
+    
         ## table retriever
-        print(f"Loading table retriever...")
-        self.table_retriever = TableRetriever(cfg)
+        # print(f"Loading table retriever...")
+        # self.table_retriever = TableRetriever(cfg)
         
         ## colbert retrievers
         print(f"Loading index...")
-        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
-        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
-        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path)
-        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("BAAI/bge-reranker-v2-minicpm-layerwise", use_fp16=True)
+        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path, checkpoint=cfg.edge_checkpoint_path)
+        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path, checkpoint=cfg.table_checkpoint_path)
+        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path, checkpoint=cfg.passage_checkpoint_path)
+        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_150", use_fp16=True)
+        
         
         # load experimental settings
-        self.top_k_of_table = cfg.top_k_of_table
         self.top_k_of_edge = cfg.top_k_of_edge
         self.top_k_of_table_segment_augmentation = cfg.top_k_of_table_segment_augmentation
         self.top_k_of_passage_augmentation = cfg.top_k_of_passage_augmentation
@@ -76,11 +145,27 @@ class GraphQueryEngine:
         self.node_scoring_method = cfg.node_scoring_method
         self.batch_size = cfg.batch_size
 
+
+
     def query(self, nl_question, retrieval_time = 2):
         
         # 1. Edge Retrieval
+            # Scored edges
         retrieved_edges = self.retrieve_edges(nl_question)
         
+        # 
+        # {
+        #   "node_id_1": {
+        #       "node_type": "table_segment" | "passage", 
+        #       "linked_nodes" : [
+        #           [target_node_id_1, score_1, retrieval_type_1, source_rank_1, target_rank_1],
+        #           ...,
+        #           [target_node_id_n, score_n, retrieval_type_n, source_rank_n, target_rank_n]
+        #       ]
+        #   },
+        #   ...,
+        #   "node_id_k": {...}
+        # }
         # 2. Graph Integration
         integrated_graph = self.integrate_graphs(retrieved_edges)
         retrieval_type = None
@@ -279,6 +364,9 @@ class GraphQueryEngine:
             
             graph[node_id]['score'] = node_score
 
+
+
+
 def filter_fn(pid, values_to_remove):
     return pid[~torch.isin(pid, values_to_remove)].to("cuda")
 
@@ -342,52 +430,7 @@ def get_context(retrieved_graph, graph_query_engine):
 
     return context
     
-@hydra.main(config_path="conf", config_name="graph_query_algorithm")
-def main(cfg: DictConfig):
-    # load qa dataset
-    print(f"Loading qa dataset...")
-    qa_dataset = json.load(open(cfg.qa_dataset_path))
-    graph_query_engine = GraphQueryEngine(cfg)
-    tokenizer = SimpleTokenizer()
-    
-    # query
-    print(f"Start querying...")
-    recall_list = []
-    error_cases = []
-    query_time_list = []
-    retrieved_query_list = []
-    for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
-        
-        nl_question = qa_datum['question']
-        answers = qa_datum['answers']
-        
-        init_time = time.time()
-        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
-        end_time = time.time()
-        query_time_list.append(end_time - init_time)
-        
-        # context = get_context(retrieved_graph, graph_query_engine)
-        # is_has_answer = has_answer(answers, context, tokenizer, 'string', max_length=4096)
 
-        # if is_has_answer:
-        #     recall_list.append(1)
-        # else:
-        #     qa_datum['retrieved_graph'] = retrieved_graph
-        #     if  "hard_negative_ctxs" in qa_datum:
-        #         del qa_datum["hard_negative_ctxs"]
-        #     error_cases.append(qa_datum)
-        #     recall_list.append(0)
-        
-        retrieved_query_list.append(retrieved_graph)
-
-    # print(f"HITS4K: {sum(recall_list) / len(recall_list)}")
-    # print(f"Average query time: {sum(query_time_list) / len(query_time_list)}")
-    
-    # save integrated graph
-    print(f"Saving integrated graph...")
-    json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
-    json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
-    # json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
 
 if __name__ == "__main__":
     main()

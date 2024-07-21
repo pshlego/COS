@@ -34,11 +34,11 @@ def assign_scores(graph, retrieval_type = "None"):
         
         graph[node_id]['score'] = node_score
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_original_reranker.json"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_w_original_reranker.json"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_finetuned_reranker.json"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_finetuned_reranker.json"#"/mnt/sdd/shpark/experimental_results/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
-    table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-    passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
-    qa_dataset_path=  "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
+    retrieved_graphs_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_original_reranker.json"#"/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_w_original_reranker.json"#"/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_finetuned_reranker.json"#"/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/reranking_first_w_finetuned_reranker.json"#"/mnt/sdd/shpark/experimental_results/output/add_reranking_passage_augmentation_150_10_2_trained_v2_faster.json" #"/mnt/sdd/shpark/output/integrated_graph_augmented_passage_10_2_v15_20_fix_scoring.json"
+    table_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+    passage_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    passage_ids_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
+    qa_dataset_path=  "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
     qa_dataset = json.load(open(qa_dataset_path))
     qa_dataset = qa_dataset
     print(f"Loading corpus...")

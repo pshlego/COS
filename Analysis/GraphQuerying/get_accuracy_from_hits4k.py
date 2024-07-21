@@ -4,10 +4,10 @@ from Algorithms.Ours.dpr.utils.tokenizers import SimpleTokenizer
 from Algorithms.Ours.dpr.data.qa_validation import has_answer
 if __name__ == "__main__":
     retrieved_graphs_path = "/mnt/sdd/shpark/output/integrated_graph_augmented_both_5_5_v11.json"
-    table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-    passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    passage_ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
-    qa_dataset_path=  "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
+    table_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+    passage_data_path= "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    passage_ids_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
+    qa_dataset_path=  "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
     qa_dataset = json.load(open(qa_dataset_path))
     qa_dataset = qa_dataset
     print(f"Loading corpus...")
@@ -138,6 +138,6 @@ if __name__ == "__main__":
                 total_recall_dict[setting_key] = sum(recall_list) / len(recall_list)
                 print(f"Setting: {setting_key}, Recall: {total_recall_dict[setting_key]}")
     print(total_recall_dict)
-    # with open("/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json", 'w') as f:
+    # with open("/root/OTT_QA_Workspace/Analysis/GraphQueryResults/error_cases.json", 'w') as f:
     #     json.dump(error_cases, f, indent=4)
         

@@ -2,8 +2,8 @@ import json
 from tqdm import tqdm
 
 if __name__ == "__main__":
-    query_path = "/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_full_layer_wo_table_retrieval.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_first.json"#"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json"#f"/mnt/sdd/shpark/experimental_results/error_case_two_node_graph/error_cases_none_1_1_v2.json"#"/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
-    generated_data_graph_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/table_chunks_to_passages_cos_table_passage.json"
+    query_path = "/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_full_layer_wo_table_retrieval.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_first.json"#"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json"#f"/mnt/sdd/shpark/experimental_results/error_case_two_node_graph/error_cases_none_1_1_v2.json"#"/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
+    generated_data_graph_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/table_chunks_to_passages_cos_table_passage.json"
 
     with open(generated_data_graph_path, 'r') as f:
         generated_data_graphs = json.load(f)
@@ -64,5 +64,5 @@ if __name__ == "__main__":
                     del query_info['hard_negative_ctxs']
                 error_cases.append(query_info)
     
-    with open("/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_rerank_full_layer_wo_table_retrieval_w_top5.json", 'w') as f:
+    with open("/root/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_rerank_full_layer_wo_table_retrieval_w_top5.json", 'w') as f:
         json.dump(error_cases, f, indent=4)

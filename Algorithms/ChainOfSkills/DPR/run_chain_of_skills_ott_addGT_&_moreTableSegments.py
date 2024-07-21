@@ -109,7 +109,7 @@ def chain_of_skills(cfg: DictConfig):
     #######################################################################################################################################
     # # Experiment 1.
     # 
-    # with open("/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/COS/ott_dev_core_reader_hop1keep200_shard0_of_1.json", "r") as file:
+    # with open("/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/COS/ott_dev_core_reader_hop1keep200_shard0_of_1.json", "r") as file:
     #     already_found = json.load(file)    
     #######################################################################################################################################
     
@@ -195,7 +195,7 @@ def chain_of_skills(cfg: DictConfig):
         
         # already_found[si]["ctxs"] = new_contexts[:100]
 
-        # with open("/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/COS/ott_dev_core_reader_hop1keep200_with_gt.json", "w") as file:
+        # with open("/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/COS/ott_dev_core_reader_hop1keep200_with_gt.json", "w") as file:
         #     json.dump(already_found, file, indent = 4)
         
         # continue

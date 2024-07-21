@@ -20,12 +20,12 @@ def read_jsonl_file(file_path):
 if __name__ == "__main__":
     positive_num = 1
     negative_num = 15
-    file_path = '/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/triples.jsonl'  # Replace with your JSONL file path
+    file_path = '/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/triples.jsonl'  # Replace with your JSONL file path
     data = read_jsonl_file(file_path)
     prompt = "Given a query A and a passage B, determine whether the passage contains an answer to the query by providing a prediction of either 'Yes' or 'No'."
     
     corpus = {}
-    collection_filepath = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/collection.tsv"
+    collection_filepath = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/collection.tsv"
     with open(collection_filepath, "r", encoding="utf8") as fIn:
         for line in fIn:
             pid, passage = line.strip().split("\t")
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     ### Read the train queries, store in queries dict
     queries = {}
-    queries_filepath = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/queries.tsv"
+    queries_filepath = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/queries.tsv"
     with open(queries_filepath, "r", encoding="utf8") as fIn:
         for line in fIn:
             qid, query = line.strip().split("\t")
@@ -65,7 +65,7 @@ if __name__ == "__main__":
         training_data.append(training_datum)
     
     #write a training data as jsonl file
-    with open('/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives.jsonl', 'w', encoding='utf-8') as file:
+    with open('/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/reranking_edge_15_negatives.jsonl', 'w', encoding='utf-8') as file:
         for item in training_data:
             file.write(json.dumps(item) + '\n')
     

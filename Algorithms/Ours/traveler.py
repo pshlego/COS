@@ -64,11 +64,11 @@ class LlamaTraverler:
         return prompt
     
 if __name__ == "__main__":
-    model_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ"
-    table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
-    passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
+    model_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ"
+    table_data_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
+    passage_data_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     table_chunk_to_linked_passage_path = "/mnt/sde/shpark/graph_constructer/mention_detector/gold/gt_dev_entities_chunks_w_exception_handling_and_linked_passage.json"
-    path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/passage_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
+    path = "/root/OTT_QA_Workspace/error_case/error_case_1/passage_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
     
     table_key_to_content = {}
     table_contents = json.load(open(table_data_path))

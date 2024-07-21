@@ -1,35 +1,42 @@
-# mongodb
-dbname: mydatabase
-username: root
-password: 1234
-port: 27017
+
+    # mongodb
+# dbname: mydatabase
+# username: root
+# password: 1234
+# port: 27017
 
 # input
-qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
-table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
-passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
+qa_dataset_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
+table_data_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
+passage_data_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 edge_name: preprocess_table_graph_cos_apply_topk_edge_1
+edge_dataset_path: /mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_edge_1.jsonl
 entity_linking_result_name: table_chunks_to_passages_cos_table_passage
+entity_linking_dataset_path: /mnt/sdd/shpark/table_chunks_to_passages_cos_table_passage.jsonl
 
 # output
-integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/llm.json
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/llm_time.json
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_case_llm.json
+integrated_graph_save_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/llm.json
+query_time_save_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/llm_time.json
+error_cases_save_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/error_case_llm.json
 
 # retriever
 ## id to chunk id
-edge_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json
-table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/index_to_chunk_id.json
-passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
+edge_ids_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json
+table_ids_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/index_to_chunk_id.json
+passage_ids_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
 
 ## colbert config
-collection_edge_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv #/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv
-collection_table_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/collection.tsv
-collection_passage_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv
+collection_edge_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv #/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv
+collection_table_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/collection.tsv
+collection_passage_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv
 
-edge_index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
-table_index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
-passage_index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
+edge_index_root_path: /mnt/sde/shpark/OTT-QAMountSpace/Embeddings
+table_index_root_path: /mnt/sde/shpark/OTT-QAMountSpace/Embeddings
+passage_index_root_path: /mnt/sde/shpark/OTT-QAMountSpace/Embeddings
+
+edge_checkpoint_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_sample_rate_0_0_0_5
+table_checkpoint_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/passage_to_table_segment_sample_rate_0_3_query_len_96
+passage_checkpoint_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/table_segment_to_passage_sample_rate_0_5_query_len_96
 
 edge_index_name: top1_edge_embeddings_trained_w_sample_rate_0_0_0_5
 table_index_name: passage_to_table_segment_embeddings_trained_w_sample_rate_0_3_cos_version_query_len_96
@@ -37,8 +44,8 @@ passage_index_name: table_segment_to_passage_embeddings_trained_w_sample_rate_0_
 
 nbits: 2
 
-cross_encoder_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/cross-encoder-ms-marco-MiniLM-L-6-v2/edge
-llm_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ
+cross_encoder_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/cross-encoder-ms-marco-MiniLM-L-6-v2/edge
+llm_path: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ
 
 # experimental setting
 top_k_of_edge: 150
@@ -65,10 +72,10 @@ indexers:
     _target_: dpr.indexer.faiss_indexers.DenseHNSWSQIndexer
 
 # a list of names of the passages datasets from the 'ctx_sources' config group
-ctx_datatsets: [/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json,/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json,[/mnt/sdf/OTT-QAMountSpace/Dataset/COS/EntityLinkingResults_GivenByAuthor/table_chunks_to_passages*]]
+ctx_datatsets: [/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json,/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json,[/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/COS/EntityLinkingResults_GivenByAuthor/table_chunks_to_passages*]]
 
 #Glob paths to encoded passages (from generate_dense_embeddings tool)
-encoded_ctx_files: [/mnt/sdf/OTT-QAMountSpace/Embeddings/COS/ott_table_original*]
+encoded_ctx_files: [/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Embeddings/COS/ott_table_original*]
 
 out_file:
 # "regex" or "string"
@@ -105,7 +112,7 @@ kilt_out_file:
 table_chunk_file:
 label_question: False
 # A trained bi-encoder checkpoint file to initialize the model
-model_file: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/COS/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
+model_file: /mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/COS/cos_nq_ott_hotpot_finetuned_6_experts.ckpt
 
 validate_as_tables: False
 rpc_retriever_cfg_file:

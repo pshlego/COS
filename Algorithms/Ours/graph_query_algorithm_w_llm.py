@@ -1,3 +1,5 @@
+import os
+import sys
 import ast
 import json
 import time
@@ -15,78 +17,160 @@ from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
 from prompts import select_table_segment_prompt, select_passage_prompt
 # VLLM Parameters
-COK_VLLM_TENSOR_PARALLEL_SIZE = 2 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
+COK_VLLM_TENSOR_PARALLEL_SIZE = 4 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 COK_VLLM_GPU_MEMORY_UTILIZATION = 0.6 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 set_seed(0)
 
-class GraphQueryEngine:
-    def __init__(self, cfg):
-        # mongodb setup
-        client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
-        mongodb = client[cfg.dbname]
 
-        # load dataset
-        ## two node graphs
-        edge_contents = mongodb[cfg.edge_name]
-        num_of_edges = edge_contents.count_documents({})
+@hydra.main(config_path = "conf", config_name = "graph_query_algorithm")
+def main(cfg: DictConfig):
+    # load qa dataset
+    print()
+    print(f"[[ Loading qa dataset... ]]", end = "\n\n")
+    qa_dataset = json.load(open(cfg.qa_dataset_path))
+    graph_query_engine = GraphQueryEngine(cfg)
+    tokenizer = SimpleTokenizer()
+    
+    # query
+    print(f"Start querying...")
+    recall_list = []
+    error_cases = []
+    query_time_list = []
+    retrieved_query_list = []
+    for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
+        
+        nl_question = qa_datum['question']
+        answers = qa_datum['answers']
+        
+        init_time = time.time()
+        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
+        end_time = time.time()
+        query_time_list.append(end_time - init_time)
+        
+        retrieved_query_list.append(retrieved_graph)
+    
+    # save integrated graph
+    print(f"Saving integrated graph...")
+    json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
+    json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
+    # json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
+
+
+
+
+class GraphQueryEngine:
+    
+    def __init__(self, cfg):
+
+        # 1. Load data graph 1:
+            # Edge id to node pair
+        print(f"1. Loading edge contents...")
+        edge_contents = []
+        EDGES_NUM = 17151500
+        with open(cfg.edge_dataset_path, "r") as file:
+            for line in tqdm(file, total = EDGES_NUM):
+                edge_contents.append(json.loads(line))
+        num_of_edges = len(edge_contents)
+        print("1. Loaded " + str(num_of_edges) + " edges!")
         self.edge_key_to_content = {}
         self.table_key_to_edge_keys = {}
-        print(f"Loading {num_of_edges} graphs...")
-        for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
+        print("1. Processing edges...")
+        for id, edge_content in tqdm(enumerate(edge_contents), total = len(edge_contents)):
             self.edge_key_to_content[edge_content['chunk_id']] = edge_content
             
             if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
                 self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
-
-            self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
+            
+            self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id) 
+        print("1. Processing edges complete", end = "\n\n")
         
-        entity_linking_results = mongodb[cfg.entity_linking_result_name]
-        num_of_entity_linking_results = entity_linking_results.count_documents({})
+        # 2. Load data graph 2:
+            # Table id to linked passages
+        SIZE_OF_DATA_GRAPH = 839810
+        print("2. Loading data graph...")
+        entity_linking_results = []
+        with open(cfg.entity_linking_dataset_path, "r") as file:
+            for line in tqdm(file, total = SIZE_OF_DATA_GRAPH):
+                entity_linking_results.append(json.loads(line))
+        num_of_entity_linking_results = len(entity_linking_results)
+        print("2. Loaded " + str(num_of_entity_linking_results) + " tables!")
         self.table_chunk_id_to_linked_passages = {}
-        print(f"Loading {num_of_entity_linking_results} entity linking results...")
-        for entity_linking_content in tqdm(entity_linking_results.find(), total=num_of_entity_linking_results):
+        print("2. Processing data graph...")
+        for entity_linking_content in tqdm(entity_linking_results):
             self.table_chunk_id_to_linked_passages[entity_linking_content['table_chunk_id']] = entity_linking_content
+        print("2. Processing data graph complete!", end = "\n\n")
         
-        ## corpus
-        print(f"Loading corpus...")
+        # 3. Load tables
+        TOTAL_NUM_OF_TABLES = 840895
+        print("3. Loading tables...")
         self.table_key_to_content = {}
         self.table_title_to_table_key = {}
         table_contents = json.load(open(cfg.table_data_path))
-        for table_key, table_content in enumerate(table_contents):
+        print("3. Loaded " + str(len(table_contents)) + " tables!")
+        print("3. Processing tables...")
+        for table_key, table_content in tqdm(enumerate(table_contents)):
             self.table_key_to_content[str(table_key)] = table_content
             self.table_title_to_table_key[table_content['chunk_id']] = table_key
+        print("3. Processing tables complete!", end = "\n\n")
         
+        # 4. Load passages
+        print("4. Loading passages...")
         self.passage_key_to_content = {}
         passage_contents = json.load(open(cfg.passage_data_path))
-        for passage_content in passage_contents:
+        print("4. Loaded " + str(len(passage_contents)) + " passages!")
+        print("4. Processing passages...")
+        for passage_content in tqdm(passage_contents):
             self.passage_key_to_content[passage_content['title']] = passage_content
+        print("4. Processing passages complete!", end = "\n\n")
 
-        # load retrievers
-        ## id mappings
+        # 5. Load Retrievers
+            ## id mappings
+        print("5. Loading retrievers...")
         self.id_to_edge_key = json.load(open(cfg.edge_ids_path))
         self.id_to_table_key = json.load(open(cfg.table_ids_path))
         self.id_to_passage_key = json.load(open(cfg.passage_ids_path))
+        print("5. Loaded retrievers complete!", end = "\n\n")
         
-        ## colbert retrievers
-        print(f"Loading index...")
-        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
-        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
-        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path)
-        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("BAAI/bge-reranker-v2-minicpm-layerwise", use_fp16=True)
+        # 6. Load ColBERT retrievers
+        print("6. Loading index...")
+        print("6 (1/4). Loading ColBERT edge retriever...")
+        disablePrint()
+        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path, checkpoint=cfg.edge_checkpoint_path)
+        enablePrint()
+        print("6 (1/4). Loaded index complete!")
+        print("6 (2/4). Loading ColBERT table retriever...")
+        disablePrint()
+        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path, checkpoint=cfg.table_checkpoint_path)
+        enablePrint()
+        print("6 (2/4). Loaded ColBERT table retriever complete!")
+        print("6 (3/4). Loading ColBERT passage retriever...")
+        disablePrint()
+        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path, checkpoint=cfg.passage_checkpoint_path)
+        enablePrint()
+        print("6 (3/4). Loaded ColBERT passage retriever complete!")
+        print("6 (4/4). Loading reranker...")
+        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_150", use_fp16=True)
+        print("6 (4/4). Loading reranker complete!")
+        print("6. Loaded index complete!", end = "\n\n")
         
-        ## large language model
+        # 7. Load LLM
+        print("7. Loading large language model...")
         self.llm = vllm.LLM(
             cfg.llm_path,
-            worker_use_ray=True,
-            tensor_parallel_size=COK_VLLM_TENSOR_PARALLEL_SIZE, 
-            gpu_memory_utilization=COK_VLLM_GPU_MEMORY_UTILIZATION, 
-            trust_remote_code=True,
-            dtype="half", # note: bfloat16 is not supported on nvidia-T4 GPUs
-            max_model_len=6144, # input length + output length
-            enforce_eager=True,
+            worker_use_ray = True,
+            tensor_parallel_size = COK_VLLM_TENSOR_PARALLEL_SIZE, 
+            gpu_memory_utilization = COK_VLLM_GPU_MEMORY_UTILIZATION, 
+            trust_remote_code = True,
+            dtype = "half", # note: bfloat16 is not supported on nvidia-T4 GPUs
+            max_model_len = 6144, # input length + output length
+            enforce_eager = True,
         )
+        print("7. Loaded large language model complete!", end = "\n\n")
         
+        # 8. Load tokenizer
+        print("8. Loading tokenizer...")
         self.tokenizer = self.llm.get_tokenizer()
+        print("8. Loaded tokenizer complete!", end = "\n\n")
         
         ## prompt templates
         self.select_table_segment_prompt = select_table_segment_prompt
@@ -103,6 +187,15 @@ class GraphQueryEngine:
         self.node_scoring_method = cfg.node_scoring_method
         self.batch_size = cfg.batch_size
 
+
+    #############################################################################
+    # Query                                                                     #
+    # Input: NL Question                                                        #
+    # Input: retrieval_time (Number of iterations)                              #
+    # Output: Retrieved Graphs (Subgraph of data graph relevant to the NL       #
+    #                           question)                                       #  
+    # ------------------------------------------------------------------------- # 
+    #############################################################################
     def query(self, nl_question, retrieval_time = 2):
         
         # 1. Edge Retrieval
@@ -113,11 +206,14 @@ class GraphQueryEngine:
         retrieval_type = None
         
         for i in range(retrieval_time):
+            
+            # From second iteration
             if i >= 1:
                 self.reranking_edges(nl_question, integrated_graph)
                 retrieval_type = 'edge_reranking'
                 self.assign_scores(integrated_graph, retrieval_type)
             
+            # Is not last iteration
             if i < retrieval_time:
                 topk_table_segment_nodes = []
                 topk_passage_nodes = []
@@ -127,17 +223,21 @@ class GraphQueryEngine:
                     elif node_info['type'] == 'passage':
                         topk_passage_nodes.append([node_id, node_info['score']])
 
+                    # Default: 10
                 topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_segment_augmentation]
+                    # Default: 0
                 topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
                 
-                # 3.1 Passage Node Augmentation
-                self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes, 'table segment', 'passage', i)
                 
-                # 3.2 Table Segment Node Augmentation
+                # Expanded Query Retrieval
+                    # 3.1 Passage Node Augmentation
+                self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes, 'table segment', 'passage', i)
+                    # 3.2 Table Segment Node Augmentation
                 self.augment_node(integrated_graph, nl_question, topk_passage_nodes, 'passage', 'table segment', i)
                 
                 self.assign_scores(integrated_graph, retrieval_type)
 
+            # Is last iteration
             if i == retrieval_time - 1:
                 table_key_list, deleted_node_id_list, table_key_to_augmented_nodes = self.get_table(integrated_graph)
                 
@@ -156,6 +256,16 @@ class GraphQueryEngine:
         
         return retrieved_graphs
     
+    
+    
+    #############################################################################
+    # Retrieve edges                                                            #
+    # Input: NL Question                                                        #
+    # Output: Retrieved Edges                                                   #
+    # ------------------------------------------------------------------------- #
+    # Retrieve `top_k_of_edge` number of edges (table segment - passage)        #
+    # relevant to the input NL question.                                        #
+    #############################################################################
     def retrieve_edges(self, nl_question):
         
         retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
@@ -176,6 +286,14 @@ class GraphQueryEngine:
 
         return retrieved_edge_contents
 
+
+    #############################################################################
+    # Reranking Edges                                                           #
+    # Input: NL Question                                                        #
+    # InOut: Retrieved Graphs                                                   #
+    # ------------------------------------------------------------------------- #
+    # Rerank edges in the retrieved graphs using the cross-encoder.             #
+    #############################################################################
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
@@ -218,6 +336,16 @@ class GraphQueryEngine:
                     self.add_node(retrieved_graphs, 'table segment', table_segment_node_id, passage_id, reranking_score, 'edge_reranking')
                     self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'edge_reranking')
     
+    
+    
+    #############################################################################
+    # SelectTableSegments                                                       #
+    # Input: NL Question                                                        #
+    # InOut: table_key_to_augmented_nodes                                       #
+    # ------------------------------------------------------------------------- #
+    # Select table segments from the retrieved graphs using the large language  #
+    # model.                                                                    #
+    #############################################################################
     def select_table_segments(self, nl_question, table_key_to_augmented_nodes):
         prompt_list = []
         table_key_list = []
@@ -302,6 +430,18 @@ class GraphQueryEngine:
             
         return selected_table_segment_list
     
+    
+    
+    
+    
+    #############################################################################
+    # SelectPassages                                                            #
+    # Input: NL Question                                                        #
+    # Input: selected_table_segment_list                                        #
+    # Input: integrated_graph                                                   #
+    # ------------------------------------------------------------------------- #
+    # Select passages from the retrieved graphs using the large language model. #
+    #############################################################################
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         prompt_list = []
         table_segment_node_id_list = []
@@ -535,6 +675,17 @@ class GraphQueryEngine:
             
             graph[node_id]['score'] = node_score
 
+
+
+
+
+
+
+
+
+
+
+
 def filter_fn(pid, values_to_remove):
     return pid[~torch.isin(pid, values_to_remove)].to("cuda")
 
@@ -597,53 +748,22 @@ def get_context(retrieved_graph, graph_query_engine):
             context += edge_text
 
     return context
-    
-@hydra.main(config_path="conf", config_name="graph_query_algorithm")
-def main(cfg: DictConfig):
-    # load qa dataset
-    print(f"Loading qa dataset...")
-    qa_dataset = json.load(open(cfg.qa_dataset_path))
-    graph_query_engine = GraphQueryEngine(cfg)
-    tokenizer = SimpleTokenizer()
-    
-    # query
-    print(f"Start querying...")
-    recall_list = []
-    error_cases = []
-    query_time_list = []
-    retrieved_query_list = []
-    for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
-        
-        nl_question = qa_datum['question']
-        answers = qa_datum['answers']
-        
-        init_time = time.time()
-        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
-        end_time = time.time()
-        query_time_list.append(end_time - init_time)
-        
-        # context = get_context(retrieved_graph, graph_query_engine)
-        # is_has_answer = has_answer(answers, context, tokenizer, 'string', max_length=4096)
 
-        # if is_has_answer:
-        #     recall_list.append(1)
-        # else:
-        #     qa_datum['retrieved_graph'] = retrieved_graph
-        #     if  "hard_negative_ctxs" in qa_datum:
-        #         del qa_datum["hard_negative_ctxs"]
-        #     error_cases.append(qa_datum)
-        #     recall_list.append(0)
-        
-        retrieved_query_list.append(retrieved_graph)
 
-    # print(f"HITS4K: {sum(recall_list) / len(recall_list)}")
-    # print(f"Average query time: {sum(query_time_list) / len(query_time_list)}")
-    
-    # save integrated graph
-    print(f"Saving integrated graph...")
-    json.dump(retrieved_query_list, open(cfg.integrated_graph_save_path, 'w'))
-    json.dump(query_time_list, open(cfg.query_time_save_path, 'w'))
-    # json.dump(error_cases, open(cfg.error_cases_save_path, 'w'))
+def disablePrint():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
     main()

@@ -13,10 +13,10 @@ def read_jsonl(file_path):
 
 batch_size = 512
 
-triples = read_jsonl('/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/triples.jsonl')
+triples = read_jsonl('/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/triples.jsonl')
 
 corpus = {}
-collection_filepath = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/collection.tsv"
+collection_filepath = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/collection.tsv"
 with open(collection_filepath, "r", encoding="utf8") as fIn:
     for line in tqdm(fIn):
         pid, passage = line.strip().split("\t")
@@ -25,7 +25,7 @@ with open(collection_filepath, "r", encoding="utf8") as fIn:
 
 ### Read the train queries, store in queries dict
 queries = {}
-queries_filepath = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/queries.tsv"
+queries_filepath = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/queries.tsv"
 with open(queries_filepath, "r", encoding="utf8") as fIn:
     for line in tqdm(fIn):
         qid, query = line.strip().split("\t")
@@ -57,7 +57,7 @@ for triple in tqdm(triples):
             pid_set.add(neg_tuple)
             pid_list.append(list(neg_tuple))
 
-cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400", use_fp16=True)
+cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400", use_fp16=True)
 
 score_info = {}
 
@@ -85,6 +85,6 @@ for qid, passage_info in score_info.items():
             training_datum.append([neg_pid, neg_score])
         training_dataset.append(training_datum)
 
-with open('/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/training_dataset_w_score_ckpt_400.jsonl', 'w', encoding='utf-8') as file:
+with open('/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/training_dataset_w_score_ckpt_400.jsonl', 'w', encoding='utf-8') as file:
     for training_datum in training_dataset:
         file.write(json.dumps(training_datum) + '\n')

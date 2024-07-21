@@ -6,7 +6,7 @@ import argparse
 ground_truth_mentions_path = "/mnt/sde/shpark/graph_constructer/mention_detector/gold/gt_dev_entities_chunks_w_exception_handling.json"
 cos_inferred_mentions_path = "/mnt/sde/shpark/graph_constructer/mention_detector/detected_mentions_from_dev_table_chunks_w_exception_handling.json"
 
-analysis_result_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/mention_detection_details.json"
+analysis_result_path = "/mnt/sdf/shpark/OTT-QAMountSpace/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/mention_detection_details.json"
 
 
 def parseArguments():
