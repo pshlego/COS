@@ -2,7 +2,7 @@ import os
 import random
 import torch
 import numpy as np
-
+from datetime import timedelta
 ALREADY_INITALIZED = False
 
 # TODO: Consider torch.distributed.is_initialized() instead
@@ -24,7 +24,7 @@ def init(rank):
         print(f'nranks = {nranks} \t num_gpus = {num_gpus} \t device={rank % num_gpus}')
 
         torch.cuda.set_device(rank % num_gpus)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        torch.distributed.init_process_group(backend='nccl', timeout=timedelta(seconds=18000000), init_method='env://')
 
     return nranks, is_distributed
 

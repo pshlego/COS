@@ -24,7 +24,7 @@ class Trainer:
         # Resources don't come from the config object. They come from the input parameters.
         # TODO: After the API stabilizes, make this "self.config.assign()" to emphasize this distinction.
         self.configure(triples=self.triples, queries=self.queries, collection=self.collection)
-        self.configure(nranks=1, checkpoint=checkpoint, accumsteps=8, bsize=128, lr=3e-06, warmup=None, doc_maxlen=512, dim=128, nway=2, use_ib_negatives=False, query_maxlen=96)
+        self.configure(checkpoint=checkpoint)
 
         launcher = Launcher(train)
 

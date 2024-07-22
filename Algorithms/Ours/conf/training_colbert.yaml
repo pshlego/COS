@@ -1,0 +1,8 @@
+# MongoDB
+experiment_name: colbert_edge_retrieval_v2 #ottqa_passage_to_table_0_2_5_sampled_96 #ottqa_table_to_passage_0_2_sampled_96 #ottqa_passage_to_table_0_2_sampled_96
+collection_root_dir_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge
+colbert_checkpoint: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_sample_rate_0_0_0_5 #/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_sample_rate_0_0_0_5 #/mnt/sdd/shpark/colbert/experiments/default/none/2024-02/09/08.17.51/checkpoints/colbert_part1
+
+triples: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/training_dataset_w_score_ckpt_400.jsonl #/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Training_Dataset/table_to_passage/triples_0_6.jsonl #/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Training_Dataset/table_to_passage/triples_0_0_0_1.jsonl #/mnt/sdd/shpark/training_data/triples.tsv_part_1.jsonl
+queries: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/queries.tsv #/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Training_Dataset/table_to_passage/queries.tsv
+collection: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Training_Dataset/edge/collection.tsv #/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Training_Dataset/table_to_passage/collection.tsv

@@ -35,6 +35,10 @@ edge_index_name: top1_edge_embeddings_trained_w_sample_rate_0_0_0_5
 table_index_name: passage_to_table_segment_embeddings_trained_w_sample_rate_0_3_cos_version_query_len_96
 passage_index_name: table_segment_to_passage_embeddings_trained_w_sample_rate_0_5_cos_version_query_len_96
 
+edge_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_sample_rate_0_0_0_5
+table_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/passage_to_table_segment_sample_rate_0_3_query_len_96
+passage_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/table_segment_to_passage_sample_rate_0_5_query_len_96
+
 nbits: 2
 
 cross_encoder_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/cross-encoder-ms-marco-MiniLM-L-6-v2/edge

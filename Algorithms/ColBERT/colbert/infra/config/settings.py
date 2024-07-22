@@ -24,7 +24,7 @@ class RunSettings:
     name: str = DefaultVal(timestamp(daydir=True))
 
     rank: int = DefaultVal(0)
-    nranks: int = DefaultVal(2) # 1
+    nranks: int = DefaultVal(4) # 1
     amp: bool = DefaultVal(True)
 
     total_visible_gpus = torch.cuda.device_count()
@@ -115,7 +115,7 @@ class DocSettings:
 
 @dataclass
 class QuerySettings:
-    query_maxlen: int = DefaultVal(96) #DefaultVal(32)
+    query_maxlen: int = DefaultVal(32) #DefaultVal(32)
     attend_to_mask_tokens : bool = DefaultVal(False)
     interaction: str = DefaultVal('colbert')
 
@@ -126,9 +126,9 @@ class TrainingSettings:
 
     bsize: int = DefaultVal(32) # 32
 
-    accumsteps: int = DefaultVal(1)
+    accumsteps: int = DefaultVal(4)
 
-    lr: float = DefaultVal(3e-06)
+    lr: float = DefaultVal(1e-05)
 
     maxsteps: int = DefaultVal(500_000)
 
@@ -137,15 +137,15 @@ class TrainingSettings:
     resume: bool = DefaultVal(False)
 
     ## NEW:
-    warmup: int = DefaultVal(None)
+    warmup: int = DefaultVal(400)#DefaultVal(None)
 
     warmup_bert: int = DefaultVal(None)
 
     relu: bool = DefaultVal(False)
 
-    nway: int = DefaultVal(2)
+    nway: int = DefaultVal(64)
 
-    use_ib_negatives: bool = DefaultVal(False)
+    use_ib_negatives: bool = True#DefaultVal(False)
 
     reranker: bool = DefaultVal(False)
 
@@ -159,7 +159,7 @@ class TrainingSettings:
 class IndexingSettings:
     index_path: str = DefaultVal(None)
 
-    nbits: int = DefaultVal(1)
+    nbits: int = DefaultVal(2)
 
     kmeans_niters: int = DefaultVal(4)
 

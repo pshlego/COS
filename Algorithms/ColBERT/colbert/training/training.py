@@ -3,7 +3,8 @@ import torch
 import random
 import torch.nn as nn
 import numpy as np
-
+import wandb
+from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 from colbert.infra import ColBERTConfig
 from colbert.training.rerank_batcher import RerankBatcher
@@ -16,14 +17,23 @@ from colbert.modeling.colbert import ColBERT
 from colbert.modeling.reranker.electra import ElectraReranker
 
 from colbert.utils.utils import print_message
-from colbert.training.utils import print_progress, manage_checkpoints
-
+from colbert.training.utils import print_progress, manage_checkpoints, get_score_avg
+from colbert.training.evaluater import CERerankingEvaluator
 
 
 def train(config: ColBERTConfig, triples, queries=None, collection=None):
     config.checkpoint = config.checkpoint or 'bert-base-uncased'
 
     if config.rank < 1:
+        # start a new wandb run to track this script
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="colbert_training",
+
+            # track hyperparameters and run metadata
+            config={
+            }
+        )
         config.help()
 
     random.seed(12345)
@@ -36,6 +46,9 @@ def train(config: ColBERTConfig, triples, queries=None, collection=None):
 
     print("Using config.bsize =", config.bsize, "(per process) and config.accumsteps =", config.accumsteps)
 
+    if config.rank < 1:
+        evaluator = CERerankingEvaluator(config)
+    
     if collection is not None:
         if config.reranker:
             reader = RerankBatcher(config, triples, queries, collection, (0 if config.rank == -1 else config.rank), config.nranks)
@@ -61,9 +74,10 @@ def train(config: ColBERTConfig, triples, queries=None, collection=None):
 
     scheduler = None
     if config.warmup is not None:
-        print(f"#> LR will use {config.warmup} warmup steps and linear decay over {config.maxsteps} steps.")
+        maxsteps = min(config.maxsteps, len(reader))//config.bsize + 1
+        print(f"#> LR will use {config.warmup} warmup steps and linear decay over {maxsteps} steps.")
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=config.warmup,
-                                                    num_training_steps=config.maxsteps)
+                                                    num_training_steps=maxsteps)
 
     warmup_bert = config.warmup_bert
     if warmup_bert is not None:
@@ -77,14 +91,13 @@ def train(config: ColBERTConfig, triples, queries=None, collection=None):
     train_loss_mu = 0.999
 
     start_batch_idx = 0
-
+    global_step = 0
     # if config.resume:
     #     assert config.checkpoint is not None
     #     start_batch_idx = checkpoint['batch']
 
     #     reader.skip_to_batch(start_batch_idx, checkpoint['arguments']['bsize'])
-
-    for batch_idx, BatchSteps in zip(range(start_batch_idx, config.maxsteps), reader):
+    for batch_idx, BatchSteps in tqdm(zip(range(start_batch_idx, maxsteps), reader), total=maxsteps-start_batch_idx):
         if (warmup_bert is not None) and warmup_bert <= batch_idx:
             set_bert_grad(colbert, True)
             warmup_bert = None
@@ -118,15 +131,19 @@ def train(config: ColBERTConfig, triples, queries=None, collection=None):
                     loss = nn.CrossEntropyLoss()(scores, labels[:scores.size(0)])
 
                 if config.use_ib_negatives:
-                    if config.rank < 1:
-                        print('\t\t\t\t', loss.item(), ib_loss.item())
+                    # if config.rank < 1:
+                    #     print('\t\t\t\t', loss.item(), ib_loss.item())
 
                     loss += ib_loss
 
                 loss = loss / config.accumsteps
+                if config.rank < 1:
+                    positive_avg, negative_avg = get_score_avg(scores)
+                    wandb.log({"loss": loss, "ib_loss": ib_loss, "positive_avg":positive_avg, "negative_avg":negative_avg}, step=global_step)
+                    global_step += 1
 
-            if config.rank < 1:
-                print_progress(scores)
+            # if config.rank < 1:
+            #     print_progress(scores)
 
             amp.backward(loss)
 
@@ -138,11 +155,22 @@ def train(config: ColBERTConfig, triples, queries=None, collection=None):
         amp.step(colbert, optimizer, scheduler)
 
         if config.rank < 1:
+            wandb.log({"train_loss": train_loss}, step=global_step)
+            # colbert.eval()
+            if batch_idx % 20 == 0:
+                with torch.no_grad():
+                    mean_mrr = evaluator(colbert)
+                    wandb.log({"mean_mrr": mean_mrr}, step=global_step)
+
+            # colbert.train()
             print_message(batch_idx, train_loss)
             manage_checkpoints(config, colbert, optimizer, batch_idx+1, savepath=None)
 
     if config.rank < 1:
         print_message("#> Done with all triples!")
+        with torch.no_grad():
+            mean_mrr = evaluator(colbert)
+            wandb.log({"mean_mrr": mean_mrr}, step=global_step)
         ckpt_path = manage_checkpoints(config, colbert, optimizer, batch_idx+1, savepath=None, consumed_all_triples=True)
 
         return ckpt_path  # TODO: This should validate and return the best checkpoint, not just the last one.

@@ -19,6 +19,9 @@ def print_progress(scores):
     positive_avg, negative_avg = round(scores[:, 0].mean().item(), 2), round(scores[:, 1].mean().item(), 2)
     print("#>>>   ", positive_avg, negative_avg, '\t\t|\t\t', positive_avg - negative_avg)
 
+def get_score_avg(scores):
+    positive_avg, negative_avg = round(scores[:, 0].mean().item(), 2), round(scores[:, 1].mean().item(), 2)
+    return positive_avg, negative_avg
 
 def manage_checkpoints(args, colbert, optimizer, batch_idx, savepath=None, consumed_all_triples=False):
     # arguments = dict(args)
@@ -43,7 +46,7 @@ def manage_checkpoints(args, colbert, optimizer, batch_idx, savepath=None, consu
         # save_checkpoint(name, 0, batch_idx, colbert, optimizer, arguments)
         path_save = os.path.join(checkpoints_path, "colbert")
 
-    if batch_idx in SAVED_CHECKPOINTS:
+    if batch_idx in SAVED_CHECKPOINTS or (batch_idx % 20 == 0):
         # name = os.path.join(path, "colbert-{}.dnn".format(batch_idx))
         # save_checkpoint(name, 0, batch_idx, colbert, optimizer, arguments)
         path_save = os.path.join(checkpoints_path, f"colbert-{batch_idx}")

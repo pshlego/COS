@@ -16,7 +16,7 @@ from Ours.dpr.utils.tokenizers import SimpleTokenizer
 from prompts import select_table_segment_prompt, select_passage_prompt
 # VLLM Parameters
 COK_VLLM_TENSOR_PARALLEL_SIZE = 2 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
-COK_VLLM_GPU_MEMORY_UTILIZATION = 0.6 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
+COK_VLLM_GPU_MEMORY_UTILIZATION = 0.5 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 set_seed(0)
 
 class GraphQueryEngine:
@@ -72,7 +72,7 @@ class GraphQueryEngine:
         self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
         self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
         self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path)
-        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("BAAI/bge-reranker-v2-minicpm-layerwise", use_fp16=True)
+        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400", use_fp16=True)
         
         ## large language model
         self.llm = vllm.LLM(
@@ -82,7 +82,7 @@ class GraphQueryEngine:
             gpu_memory_utilization=COK_VLLM_GPU_MEMORY_UTILIZATION, 
             trust_remote_code=True,
             dtype="half", # note: bfloat16 is not supported on nvidia-T4 GPUs
-            max_model_len=6144, # input length + output length
+            max_model_len=5000, # input length + output length
             enforce_eager=True,
         )
         
@@ -102,7 +102,8 @@ class GraphQueryEngine:
 
         self.node_scoring_method = cfg.node_scoring_method
         self.batch_size = cfg.batch_size
-
+    
+    @profile
     def query(self, nl_question, retrieval_time = 2):
         
         # 1. Edge Retrieval
@@ -143,11 +144,11 @@ class GraphQueryEngine:
                 
                 selected_table_segment_list = self.select_table_segments(nl_question, table_key_to_augmented_nodes)
 
-                #delete node which from selected tables
-                if len(selected_table_segment_list) > 0:
-                    self.delete_nodes(integrated_graph, deleted_node_id_list)
-                else:
-                    break
+                # #delete node which from selected tables
+                # if len(selected_table_segment_list) > 0:
+                #     self.delete_nodes(integrated_graph, deleted_node_id_list)
+                # else:
+                #     break
                 
                 self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
             
@@ -156,6 +157,7 @@ class GraphQueryEngine:
         
         return retrieved_graphs
     
+    @profile
     def retrieve_edges(self, nl_question):
         
         retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
@@ -175,7 +177,8 @@ class GraphQueryEngine:
             retrieved_edge_contents.append(retrieved_edge_content)
 
         return retrieved_edge_contents
-
+    
+    @profile
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
@@ -218,6 +221,7 @@ class GraphQueryEngine:
                     self.add_node(retrieved_graphs, 'table segment', table_segment_node_id, passage_id, reranking_score, 'edge_reranking')
                     self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'edge_reranking')
     
+    @profile
     def select_table_segments(self, nl_question, table_key_to_augmented_nodes):
         prompt_list = []
         table_key_list = []
@@ -289,7 +293,10 @@ class GraphQueryEngine:
                 selected_rows = ast.literal_eval(selected_rows)
                 selected_rows = [string.strip() for string in selected_rows]
             except:
-                selected_rows = [selected_rows.strip()]
+                try:
+                    selected_rows = [selected_rows.strip()]
+                except:
+                    continue
                 
             for selected_row in selected_rows:
                 try:
@@ -298,10 +305,14 @@ class GraphQueryEngine:
                 except:
                     continue
                 
+                if row_id not in table_id_to_linked_passage_ids[table_key]:
+                    continue
+                
                 selected_table_segment_list.append({"table_segment_node_id": f"{table_key}_{row_id}", "linked_passages": table_id_to_linked_passage_ids[table_key][str(row_id)]})
             
         return selected_table_segment_list
     
+    @profile
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         prompt_list = []
         table_segment_node_id_list = []
@@ -318,10 +329,13 @@ class GraphQueryEngine:
             table_segment_text = column_name + '\n' + row_values
             table_segment_content = {"title": table_title, "content": table_segment_text}
             linked_passage_contents = []
+            linked_passage_id_set = set()
             for linked_passage_info in linked_passages:
                 linked_passage_id = linked_passage_info[0]
-                linked_passage_type = linked_passage_info[1]
+                if linked_passage_id in linked_passage_id_set:
+                    continue
                 linked_passage_contents.append({"title":linked_passage_id, "content": self.passage_key_to_content[linked_passage_id]['text']})
+                linked_passage_id_set.add(linked_passage_id)
                 
             graph = {"table_segment": table_segment_content, "linked_passages": linked_passage_contents}
 
@@ -337,6 +351,7 @@ class GraphQueryEngine:
                 trimmed_tokenized_content = tokenized_content[:128]
                 trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
                 linked_passage_contents += f"Title: {title}. Content: {trimmed_content}\n\n"
+                
             contents_for_prompt = {"question": nl_question, "table_segment": table_segment_content, "linked_passages": linked_passage_contents}
             prompt = self.get_prompt(contents_for_prompt)
             prompt_list.append(prompt)
@@ -359,6 +374,7 @@ class GraphQueryEngine:
             selected_passage_id_list = response.outputs[0].text
             try:
                 selected_passage_id_list = ast.literal_eval(selected_passage_id_list)
+                selected_passage_id_list = list(set(selected_passage_id_list))
             except:
                 selected_passage_id_list = [selected_passage_id_list]
             
@@ -396,6 +412,7 @@ class GraphQueryEngine:
 
         return integrated_graph
 
+    @profile
     def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
         for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
             expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
@@ -495,7 +512,7 @@ class GraphQueryEngine:
                 table_and_linked_passages += f"Passages linked to Row_{row_id + 1}:\n"
                 for linked_passage in list(set(row_id_to_linked_passage_contents[str(row_id)])):
                     tokenized_content = self.tokenizer.encode(linked_passage)
-                    trimmed_tokenized_content = tokenized_content[:96]
+                    trimmed_tokenized_content = tokenized_content[:64]
                     trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
                     table_and_linked_passages += f"- {trimmed_content}\n"
             table_and_linked_passages += "\n\n"

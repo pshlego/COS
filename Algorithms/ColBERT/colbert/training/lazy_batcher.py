@@ -26,15 +26,15 @@ class LazyBatcher():
 
         self.triples = Examples.cast(triples, nway=self.nway).tolist(rank, nranks)
         
-        qids = [qid for qid, *_ in self.triples]
-        indices = get_indices_to_avoid_repeated_qids_in_minibatch(qids, self.bsize)
-        assert len(indices) + self.bsize >= len(
-            self.triples
-        ), f"len(indices)={len(indices)}, len(self.triples)={len(self.triples)}, self.bsize={self.bsize}"
-        assert len(set(indices)) + self.bsize >= len(
-            set(qids)
-        ), f"len(set(indices))={len(set(indices))}, len(set(qids))={len(set(qids))}, self.bsize={self.bsize}"
-        self.triples = [self.triples[i] for i in indices]
+        # qids = [qid for qid, *_ in self.triples]
+        # indices = get_indices_to_avoid_repeated_qids_in_minibatch(qids, self.bsize)
+        # assert len(indices) + self.bsize >= len(
+        #     self.triples
+        # ), f"len(indices)={len(indices)}, len(self.triples)={len(self.triples)}, self.bsize={self.bsize}"
+        # assert len(set(indices)) + self.bsize >= len(
+        #     set(qids)
+        # ), f"len(set(indices))={len(set(indices))}, len(set(qids))={len(set(qids))}, self.bsize={self.bsize}"
+        # self.triples = [self.triples[i] for i in indices]
         
         self.queries = Queries.cast(queries)
         self.collection = Collection.cast(collection)

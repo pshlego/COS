@@ -56,17 +56,16 @@ class GraphQueryEngine:
         
         ## table retriever
         print(f"Loading table retriever...")
-        self.table_retriever = TableRetriever(cfg)
+        # self.table_retriever = TableRetriever(cfg)
         
         ## colbert retrievers
         print(f"Loading index...")
-        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
-        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path)
-        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path)
-        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("BAAI/bge-reranker-v2-minicpm-layerwise", use_fp16=True)
+        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path, checkpoint=cfg.edge_checkpoint_path)
+        self.colbert_table_retriever = Searcher(index=f"{cfg.table_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_table_path, index_root=cfg.table_index_root_path, checkpoint=cfg.table_checkpoint_path)
+        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path, checkpoint=cfg.passage_checkpoint_path)
+        self.cross_encoder_edge_retriever = LayerWiseFlagLLMReranker("/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400", use_fp16=True)
         
         # load experimental settings
-        self.top_k_of_table = cfg.top_k_of_table
         self.top_k_of_edge = cfg.top_k_of_edge
         self.top_k_of_table_segment_augmentation = cfg.top_k_of_table_segment_augmentation
         self.top_k_of_passage_augmentation = cfg.top_k_of_passage_augmentation

@@ -4,11 +4,11 @@ username: root
 password: 1234
 port: 27017
 
-hierarchical_level: both # edge, star, both
+hierarchical_level: edge #both # edge, star, both
 
 experiment_name: ottqa
-collection_names: ["preprocess_table_graph_cos_apply_topk_edge_5", "preprocess_table_graph_cos_apply_topk_star_5"] # "preprocess_table_graph_author_w_score_2_edge"
-collection_root_dir_path: /mnt/sdc/shpark/colbert/data
+collection_names: ["preprocess_table_graph_cos_apply_topk_edge_1"] #[preprocess_table_graph_cos_apply_topk_edge_5] #["preprocess_table_graph_cos_apply_topk_edge_5"] # "preprocess_table_graph_author_w_score_2_edge"
+collection_root_dir_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1 #/mnt/sdf/OTT-QAMountSpace/Dataset/ColBERT_Embedding_Dataset/gold
 
 nbits: 2
-colbert_checkpoint: /mnt/sdd/shpark/colbert/colbertv2.0
+colbert_checkpoint: /mnt/sdc/shpark/OTT-QAMountSpace/experiments/default/none/2024-07/21/05.03.42/checkpoints/colbert-60 #/home/shpark/OTT_QA_Workspace/experiments/default/none/2024-07/18/01.27.57/checkpoints/colbert-1000 #/mnt/sdd/shpark/colbert/experiments/default/none/2024-05/18/12.53.53/checkpoints/colbert_edge_retrieval_sampled_0_0_0_3 #/mnt/sdf/shpark/experiments/default/none/2024-04/23/09.05.26/checkpoints/colbert_edge_retrieval_sampled_0_0_0_5 #/mnt/sde/shpark/colbert/original_colbert/colbertv2.0 #/mnt/sdf/shpark/experiments/default/none/2024-04/22/11.42.06/checkpoints/colbert_edge_retrieval_sampled_0_0_1 #/mnt/sdd/shpark/colbert/experiments/default/none/2024-02/09/08.17.51/checkpoints/colbert_part1

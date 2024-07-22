@@ -6,7 +6,7 @@ import re
 import unicodedata
 
 import jsonlines
-import spacy as spacy
+# import spacy as spacy
 from typing import List, Dict
 
 
@@ -286,12 +286,12 @@ def convert_jsonl_to_qas_tsv(path, out):
     logger.info("Saved to %s", out)
 
 
-nlp = spacy.load("en_core_web_sm", disable=["parser", "tagger", "ner", "entity_ruler"])
+# nlp = spacy.load("en_core_web_sm", disable=["parser", "tagger", "ner", "entity_ruler"])
 
 
-def tokenize(text):
-    doc = nlp(text)
-    return [token.text.lower() for token in doc]
+# def tokenize(text):
+#     doc = nlp(text)
+#     return [token.text.lower() for token in doc]
 
 
 def normalize(text):
