@@ -249,12 +249,6 @@ class GraphQueryEngine:
                 table_key_list, deleted_node_id_list, table_key_to_augmented_nodes = self.get_table(integrated_graph)
                 
                 selected_table_segment_list = self.select_table_segments(nl_question, table_key_to_augmented_nodes)
-
-                # delete node which from selected tables
-                if len(selected_table_segment_list) > 0:
-                    self.delete_nodes(integrated_graph, deleted_node_id_list)
-                else:
-                    break
                 
                 self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
             
@@ -342,7 +336,7 @@ class GraphQueryEngine:
 
 
     #############################################################################
-    # Reranking Edges                                                           #
+    # RerankingEdges                                                            #
     # Input: NL Question                                                        #
     # InOut: Retrieved Graphs - actually just any `graph`                       #
     # ------------------------------------------------------------------------- #
@@ -350,6 +344,7 @@ class GraphQueryEngine:
     # encoder edge reranker.                                                    #
     # The scores are assigned via `addNode` function.                           #
     #############################################################################
+    # TODO: change after on (add_node -> change score)
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
@@ -436,7 +431,7 @@ class GraphQueryEngine:
     # Input: retrieved_node_type                                                #
     # Input: retrieval_time                                                     #
     # ------------------------------------------------------------------------- #
-    # ???
+    # Add 20 edges for target nodes which are the top k nodes in the query      #
     #############################################################################
     def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
         
@@ -561,7 +556,11 @@ class GraphQueryEngine:
     # Input: NL Question                                                        #
     # InOut: table_key_to_augmented_nodes                                       #
     # ------------------------------------------------------------------------- #
-    # ???
+    # Rip each table into table segments and its linked passage nodes.          #
+    # For each table segment, put its content and its linked passages into the  #
+    #   prompt, and get the response from the LLM.                              #
+    # Parse the response, then select the table segments and its linked         #
+    #   passages into a dictionary (a list of them is returned).                #
     #############################################################################
     def select_table_segments(self, nl_question, table_key_to_augmented_nodes):
         prompt_list = []
@@ -609,7 +608,7 @@ class GraphQueryEngine:
                         continue
             
             table_and_linked_passages = self.get_table_and_linked_passages(table_info, row_id_to_linked_passage_contents)
-            contents_for_prompt = {'question':nl_question, 'table_and_linked_passages': table_and_linked_passages}
+            contents_for_prompt = {'question': nl_question, 'table_and_linked_passages': table_and_linked_passages}
             prompt = self.get_prompt(contents_for_prompt)
             prompt_list.append(prompt)
             table_key_list.append(table_key)
@@ -617,12 +616,12 @@ class GraphQueryEngine:
         responses = self.llm.generate(
                 prompt_list,
                 vllm.SamplingParams(
-                    n=1,  # Number of output sequences to return for each prompt.
-                    top_p=0.9,  # Float that controls the cumulative probability of the top tokens to consider.
-                    temperature=0.5,  # randomness of the sampling
-                    skip_special_tokens=True,  # Whether to skip special tokens in the output.
-                    max_tokens=64,  # Maximum number of tokens to generate per output sequence.
-                    logprobs=1
+                    n = 1,  # Number of output sequences to return for each prompt.
+                    top_p = 0.9,  # Float that controls the cumulative probability of the top tokens to consider.
+                    temperature = 0.5,  # randomness of the sampling
+                    skip_special_tokens = True,  # Whether to skip special tokens in the output.
+                    max_tokens = 64,  # Maximum number of tokens to generate per output sequence.
+                    logprobs = 1
                 ),
                 use_tqdm = False
             )
@@ -640,6 +639,7 @@ class GraphQueryEngine:
                 try:
                     row_id = selected_row.split('_')[1]
                     row_id = str(int(row_id) - 1)
+                    _ = table_id_to_linked_passage_ids[table_key][str(row_id)]
                 except:
                     continue
                 
@@ -652,14 +652,15 @@ class GraphQueryEngine:
     # getTableAndLinkedPassages                                                 #
     # Input: table_info                                                         #
     # Input: row_id_to_linked_passage_contents                                  #
-    # Output: table_and_linked_passages                                         #
+    # Output: table_and_linked_passages (string)                                #
     # ------------------------------------------------------------------------- #
-    # ???
+    # Get the table and its linked passages in a string format.                 #
     #############################################################################
     def get_table_and_linked_passages(self, table_info, row_id_to_linked_passage_contents):
         table_and_linked_passages = ""
         table_and_linked_passages += f"Table Name: {table_info['title']}\n"
         table_and_linked_passages += f"Column Name: {table_info['column_name'].replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n\n"
+        
         for row_id, row_content in enumerate(table_info['rows']):
             table_and_linked_passages += f"Row_{row_id + 1}: {row_content.replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n"
             if str(row_id) in row_id_to_linked_passage_contents:
@@ -678,9 +679,13 @@ class GraphQueryEngine:
     # SelectPassages                                                            #
     # Input: NL Question                                                        #
     # Input: selected_table_segment_list                                        #
-    # Input: integrated_graph                                                   #
+    # InOut: integrated_graph                                                   #
     # ------------------------------------------------------------------------- #
-    # ???
+    # For each selected table segment, put its content and its linked passages  #
+    #   into the prompt, and get the response from the LLM.                     #
+    # Parse the response, then update the `integrated_graph` with the selected  #
+    #   table segments and its linked passages.                                 #
+    # They are marked as `llm_based_selection`.                                 # 
     #############################################################################
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         prompt_list = []
@@ -794,13 +799,28 @@ class GraphQueryEngine:
         # add target node
         else:
             graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
-            
+    
+    #############################################################################
+    # GetPrompt                                                                 #
+    #############################################################################
+    def get_prompt(self, contents_for_prompt):
+        if 'linked_passages' in contents_for_prompt:
+            prompt = self.select_passage_prompt.format(**contents_for_prompt)
+        else:
+            prompt = self.select_table_segment_prompt.format(**contents_for_prompt)
+        
+        return prompt
+    
+    
+    
+    
+    
     #############################################################################
     # DeleteNodes                                                               #
     # InOut: graph                                                              #
     # Input: node_list                                                          #
     # ------------------------------------------------------------------------- #
-    # ???
+    # Not used                                                                  #
     #############################################################################
     def delete_nodes(self, graph, node_list):
         # Convert node_list to a set for O(1) average time complexity lookups
@@ -820,19 +840,6 @@ class GraphQueryEngine:
         # Delete nodes that are not linked to any other node
         for node_id in nodes_to_delete:
             del graph[node_id]
-    
-    
-    #############################################################################
-    # GetPrompt                                                                 #
-    #############################################################################
-    def get_prompt(self, contents_for_prompt):
-        if 'linked_passages' in contents_for_prompt:
-            prompt = self.select_passage_prompt.format(**contents_for_prompt)
-        else:
-            prompt = self.select_table_segment_prompt.format(**contents_for_prompt)
-        
-        return prompt
-    
     
     
     
@@ -912,7 +919,6 @@ def get_context(retrieved_graph, graph_query_engine):
 def disablePrint():
     sys.stdout = open(os.devnull, 'w')
 
-# Restore
 def enablePrint():
     sys.stdout = sys.__stdout__
 
