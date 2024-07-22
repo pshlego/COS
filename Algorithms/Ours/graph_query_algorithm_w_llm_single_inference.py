@@ -13,7 +13,7 @@ from ColBERT.colbert.infra import ColBERTConfig
 from FlagEmbedding import LayerWiseFlagLLMReranker
 from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
-from prompts import select_table_segment_prompt, select_passage_prompt
+from prompts import select_nodes_prompt
 # VLLM Parameters
 COK_VLLM_TENSOR_PARALLEL_SIZE = 2 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 COK_VLLM_GPU_MEMORY_UTILIZATION = 0.5 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
@@ -89,8 +89,9 @@ class GraphQueryEngine:
         self.tokenizer = self.llm.get_tokenizer()
         
         ## prompt templates
-        self.select_table_segment_prompt = select_table_segment_prompt
-        self.select_passage_prompt = select_passage_prompt
+        # self.select_table_segment_prompt = select_table_segment_prompt
+        # self.select_passage_prompt = select_passage_prompt
+        self.select_nodes_prompt = select_nodes_prompt
         
         # load experimental settings
         self.top_k_of_edge = cfg.top_k_of_edge
@@ -142,9 +143,16 @@ class GraphQueryEngine:
             if i == retrieval_time - 1:
                 table_key_list, deleted_node_id_list, table_key_to_augmented_nodes = self.get_table(integrated_graph)
                 
-                selected_table_segment_list = self.select_table_segments(nl_question, table_key_to_augmented_nodes)
+                selected_node_info_list = self.select_nodes(nl_question, table_key_to_augmented_nodes)
                 
-                self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
+                for selected_node_info in selected_node_info_list:
+                    table_segment_node_id = selected_node_info['table_segment']
+                    passage_id = selected_node_info['passage']
+                    reranking_score = 10000
+                    self.add_node(integrated_graph, 'table segment', table_segment_node_id, passage_id, reranking_score, 'llm_inference')
+                    self.add_node(integrated_graph, 'passage', passage_id, table_segment_node_id, reranking_score, 'llm_inference')        
+                
+                # self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
             
             self.assign_scores(integrated_graph, retrieval_type)
             retrieved_graphs = integrated_graph
@@ -216,7 +224,7 @@ class GraphQueryEngine:
                     self.add_node(retrieved_graphs, 'passage', passage_id, table_segment_node_id, reranking_score, 'edge_reranking')
     
     # @profile
-    def select_table_segments(self, nl_question, table_key_to_augmented_nodes):
+    def select_nodes(self, nl_question, table_key_to_augmented_nodes):
         prompt_list = []
         table_key_list = []
         table_id_to_linked_passage_ids = {}
@@ -242,7 +250,7 @@ class GraphQueryEngine:
                     table_id_to_linked_passage_ids[table_key][row_id] = []
                 
                 try:
-                    row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[linked_passage_info['retrieved'][0]]['text'])
+                    row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[linked_passage_info['retrieved'][0]])
                     table_id_to_linked_passage_ids[table_key][row_id].append([linked_passage_info['retrieved'][0], 'entity_linking'])
                 except:
                     continue
@@ -256,7 +264,7 @@ class GraphQueryEngine:
                 
                 for augmented_node in list(set(augmented_nodes)):
                     try:
-                        row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[augmented_node]['text'])
+                        row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[augmented_node])
                         table_id_to_linked_passage_ids[table_key][row_id].append([augmented_node, 'passage_node_augmentation'])
                     except:
                         continue
@@ -280,31 +288,29 @@ class GraphQueryEngine:
                 use_tqdm = False
             )
         
-        selected_table_segment_list = []
+        selected_node_list = []
         for table_key, response in zip(table_key_list, responses):
-            selected_rows = response.outputs[0].text
+            selected_nodes = response.outputs[0].text
             try:
-                selected_rows = ast.literal_eval(selected_rows)
-                selected_rows = [string.strip() for string in selected_rows]
+                selected_nodes = ast.literal_eval(selected_nodes)
+                for row_id, linked_passage_list in selected_nodes.items():
+                    try:
+                        row_id = row_id.split('_')[1]
+                        row_id = str(int(row_id) - 1)
+                    except:
+                        continue
+                    
+                    if row_id not in table_id_to_linked_passage_ids[table_key]:
+                        continue
+                    
+                    for passage_title in linked_passage_list:
+                        if passage_title not in self.passage_key_to_content:
+                            continue
+                        selected_node_list.append({"table_segment": f"{table_key}_{row_id}", "passage": passage_title})
             except:
-                try:
-                    selected_rows = [selected_rows.strip()]
-                except:
-                    continue
-                
-            for selected_row in selected_rows:
-                try:
-                    row_id = selected_row.split('_')[1]
-                    row_id = str(int(row_id) - 1)
-                except:
-                    continue
-                
-                if row_id not in table_id_to_linked_passage_ids[table_key]:
-                    continue
-                
-                selected_table_segment_list.append({"table_segment_node_id": f"{table_key}_{row_id}", "linked_passages": table_id_to_linked_passage_ids[table_key][str(row_id)]})
-            
-        return selected_table_segment_list
+                continue
+        
+        return selected_node_list
     
     # @profile
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
@@ -504,20 +510,29 @@ class GraphQueryEngine:
             table_and_linked_passages += f"Row_{row_id + 1}: {row_content.replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')}\n"
             if str(row_id) in row_id_to_linked_passage_contents:
                 table_and_linked_passages += f"Passages linked to Row_{row_id + 1}:\n"
-                for linked_passage in list(set(row_id_to_linked_passage_contents[str(row_id)])):
-                    tokenized_content = self.tokenizer.encode(linked_passage)
+                passage_set = set()
+                for linked_passage in row_id_to_linked_passage_contents[str(row_id)]:
+                    passage_title = linked_passage['title']
+                    
+                    if passage_title not in passage_set:
+                        passage_set.add(passage_title)
+                    else:
+                        continue
+                    
+                    tokenized_content = self.tokenizer.encode(linked_passage['text'])
                     trimmed_tokenized_content = tokenized_content[:64]
                     trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
-                    table_and_linked_passages += f"- {trimmed_content}\n"
+                    table_and_linked_passages += f"- {passage_title}: {trimmed_content}\n"
+                    
             table_and_linked_passages += "\n\n"
 
         return table_and_linked_passages
 
     def get_prompt(self, contents_for_prompt):
-        if 'linked_passages' in contents_for_prompt:
-            prompt = self.select_passage_prompt.format(**contents_for_prompt)
-        else:
-            prompt = self.select_table_segment_prompt.format(**contents_for_prompt)
+        # if 'linked_passages' in contents_for_prompt:
+        #     prompt = self.select_passage_prompt.format(**contents_for_prompt)
+        # else:
+        prompt = self.select_nodes_prompt.format(**contents_for_prompt)
         
         return prompt
     
