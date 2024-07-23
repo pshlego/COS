@@ -22,6 +22,29 @@ from prompts import select_table_segment_prompt, select_passage_prompt
 # VLLM Parameters
 COK_VLLM_TENSOR_PARALLEL_SIZE = 4 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
 COK_VLLM_GPU_MEMORY_UTILIZATION = 0.6 # TUNE THIS VARIABLE depending on the number of GPUs you are requesting and the size of your model.
+
+
+ROW_ID_IDX = 1
+
+# Augment module
+NUM_NODES_TO_AUGMENT = 20
+
+# Reranking module
+CUTOFF_LAYER = 40
+EDGE_RERANKING_BATCH_SIZE = 200
+EDGE_RERANKING_MAX_LENGTH = 256
+
+# LLM Module
+LLM_GIVEN_EDGE_SCORE = 10000000
+
+#
+FINAL_MAX_EDGE_COUNT = 50
+TABLE_AND_PASSAGE_TRIM_LENGTH = 96
+PASSAGE_TRIM_LENGTH = 128
+
+
+
+
 set_seed(0)
 
 
@@ -36,10 +59,8 @@ def main(cfg: DictConfig):
     
     # query
     print(f"Start querying...")
-    recall_list = []
-    error_cases = []
+    
     query_time_list = []
-    retrieved_query_list = []
     for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
         
         nl_question = qa_datum['question']
@@ -52,8 +73,6 @@ def main(cfg: DictConfig):
         retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
         end_time = time.time()
         query_time_list.append(end_time - init_time)
-        
-        retrieved_query_list.append(retrieved_graph)
         
         to_print = {
             "qa data": qa_datum,
@@ -114,7 +133,6 @@ class GraphQueryEngine:
         print("2. Processing data graph complete!", end = "\n\n")
         
         # 3. Load tables
-        TOTAL_NUM_OF_TABLES = 840895
         print("3. Loading tables...")
         self.table_key_to_content = {}
         self.table_title_to_table_key = {}
@@ -167,23 +185,23 @@ class GraphQueryEngine:
         print("6. Loaded index complete!", end = "\n\n")
         
         # 7. Load LLM
-        # print("7. Loading large language model...")
-        # self.llm = vllm.LLM(
-        #     cfg.llm_path,
-        #     worker_use_ray = True,
-        #     tensor_parallel_size = COK_VLLM_TENSOR_PARALLEL_SIZE, 
-        #     gpu_memory_utilization = COK_VLLM_GPU_MEMORY_UTILIZATION, 
-        #     trust_remote_code = True,
-        #     dtype = "half", # note: bfloat16 is not supported on nvidia-T4 GPUs
-        #     max_model_len = 6144, # input length + output length
-        #     enforce_eager = True,
-        # )
-        # print("7. Loaded large language model complete!", end = "\n\n")
+        print("7. Loading large language model...")
+        self.llm = vllm.LLM(
+            cfg.llm_path,
+            worker_use_ray = True,
+            tensor_parallel_size = COK_VLLM_TENSOR_PARALLEL_SIZE, 
+            gpu_memory_utilization = COK_VLLM_GPU_MEMORY_UTILIZATION, 
+            trust_remote_code = True,
+            dtype = "half", # note: bfloat16 is not supported on nvidia-T4 GPUs
+            max_model_len = 6144, # input length + output length
+            enforce_eager = True,
+        )
+        print("7. Loaded large language model complete!", end = "\n\n")
         
         # 8. Load tokenizer
-        # print("8. Loading tokenizer...")
-        # self.tokenizer = self.llm.get_tokenizer()
-        # print("8. Loaded tokenizer complete!", end = "\n\n")
+        print("8. Loading tokenizer...")
+        self.tokenizer = self.llm.get_tokenizer()
+        print("8. Loaded tokenizer complete!", end = "\n\n")
         
         ## prompt templates
         self.select_table_segment_prompt = select_table_segment_prompt
@@ -260,15 +278,15 @@ class GraphQueryEngine:
                 
                 # Expanded Query Retrieval
                     # 3.1 Passage Node Augmentation
-                self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes, 'table segment', 'passage', i)
+                self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes,  'table segment', 'passage', i)
                     # 3.2 Table Segment Node Augmentation
-                self.augment_node(integrated_graph, nl_question, topk_passage_nodes, 'passage', 'table segment', i)
+                self.augment_node(integrated_graph, nl_question, topk_passage_nodes,        'passage', 'table segment', i)
                 
                 self.assign_scores(integrated_graph, retrieval_type)
 
             # Is last iteration
             if i == retrieval_time - 1:
-                table_key_list, deleted_node_id_list, table_id_to_linked_nodes = self.get_table(integrated_graph)
+                _, _, table_id_to_linked_nodes = self.get_table(integrated_graph)
                 
                 table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info \
                                                     = self.combine_linked_passages(table_id_to_linked_nodes)
@@ -408,7 +426,9 @@ class GraphQueryEngine:
             edge_batch = edges[i : i + self.batch_size]
             model_input = [[nl_question, edge['text']] for edge in edge_batch]
             with torch.no_grad():
-                edge_scores = self.cross_encoder_edge_retriever.compute_score(model_input, batch_size = 200, cutoff_layers = [40], max_length = 256)
+                
+                
+                edge_scores = self.cross_encoder_edge_retriever.compute_score(model_input, batch_size = EDGE_RERANKING_BATCH_SIZE, cutoff_layers = [CUTOFF_LAYER], max_length = EDGE_RERANKING_MAX_LENGTH)
             
                 for edge, score in zip(edge_batch, edge_scores):
                     table_segment_node_id = edge['table_segment_node_id']
@@ -469,12 +489,12 @@ class GraphQueryEngine:
             expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
             
             if query_node_type == 'table segment':
-                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 20)
+                retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, NUM_NODES_TO_AUGMENT)
                 retrieved_id_list = retrieved_node_info[0]
                 # retrieved_score_list = retrieved_node_info[2]
                 top_k = self.top_k_of_passage
             else:
-                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, 20)
+                retrieved_node_info = self.colbert_table_retriever.search(expanded_query, NUM_NODES_TO_AUGMENT)
                 retrieved_id_list = retrieved_node_info[0]
                 # retrieved_score_list = retrieved_node_info[2]
                 top_k = self.top_k_of_table_segment
@@ -564,19 +584,20 @@ class GraphQueryEngine:
     # node of what were the table segment nodes.                                #
     #############################################################################
     def get_table(self, retrieved_graph):
-        sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
         
         table_key_list = []
         node_id_list = []
         table_key_to_augmented_nodes = {}
+        
+        sorted_retrieved_graph = sorted(retrieved_graph.items(), key=lambda x: x[1]['score'], reverse=True)
+        
         for node_id, node_info in sorted_retrieved_graph:
+            
             if node_info['type'] == 'table segment' and len(table_key_list) < self.top_k_of_table_select_w_llm:
                 table_key = node_id.split('_')[0]
                 if table_key not in table_key_list:
                     table_key_list.append(table_key)
                     table_key_to_augmented_nodes[table_key] = {}
-                
-                # table_key_to_augmented_nodes[table_key][node_id.split('_')[-1]] = [node_info[0] for node_info in node_info['linked_nodes'] if 'augmentation' in node_info[2]]
                 table_key_to_augmented_nodes[table_key][node_id.split('_')[-1]] = list(set([node_info[0] for node_info in node_info['linked_nodes']]))
                 
             if node_info['type'] == 'table segment' and node_id.split('_')[0] in table_key_list:
@@ -602,7 +623,6 @@ class GraphQueryEngine:
             if table_id not in table_id_to_row_id_to_linked_passage_ids:
                 table_id_to_row_id_to_linked_passage_ids[table_id] = {}
             
-            
             # 1. Calculate table info and put it in `table_id_to_table_info`
             linked_passage_info = self.table_chunk_id_to_linked_passages[self.table_key_to_content[table_id]['chunk_id']]
             table_title = linked_passage_info['question'].split(' [SEP] ')[0]
@@ -612,23 +632,6 @@ class GraphQueryEngine:
             table_info = {"title": table_title, "column_name": table_column_name, "rows": table_rows}
             
             table_id_to_table_info[table_id] = table_info
-            
-            
-            # row_id_to_linked_passage_contents = {}
-            # for linked_passage_info in linked_passages:
-            #     row_id = str(linked_passage_info['row'])
-            #     if row_id not in row_id_to_linked_passage_contents:
-            #         row_id_to_linked_passage_contents[row_id] = []
-            #
-            #     if row_id not in table_id_to_linked_passage_ids[table_key]:
-            #         table_id_to_linked_passage_ids[table_key][row_id] = []
-            #
-            #     try:
-            #         row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[linked_passage_info['retrieved'][0]]['text'])
-            #         table_id_to_linked_passage_ids[table_key][row_id].append([linked_passage_info['retrieved'][0], 'entity_linking'])
-            #     except:
-            #         continue
-            
             
             # 2. Calculate table row to table linked passages and put it in
                 #       `table_id_to_row_id_to_linked_passage_ids`
@@ -705,7 +708,7 @@ class GraphQueryEngine:
                 
             for selected_row in selected_rows:
                 try:
-                    row_id = selected_row.split('_')[1]
+                    row_id = selected_row.split('_')[ROW_ID_IDX]
                     row_id = str(int(row_id) - 1)
                     _ = table_id_to_linked_passage_ids[table_id][str(row_id)]
                 except:
@@ -753,114 +756,13 @@ class GraphQueryEngine:
                     linked_passage_content = self.passage_key_to_content[linked_passage_id]['text']
                     
                     tokenized_content = self.tokenizer.encode(linked_passage_content)
-                    trimmed_tokenized_content = tokenized_content[:96]
+                    trimmed_tokenized_content = tokenized_content[ : TABLE_AND_PASSAGE_TRIM_LENGTH]
                     trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
                     table_and_linked_passages += f"- {trimmed_content}\n"
                     
             table_and_linked_passages += "\n\n"
 
         return table_and_linked_passages
-    
-    
-    
-    #############################################################################
-    # SelectTableSegments                                                       #
-    # Input: NL Question                                                        #
-    # InOut: table_key_to_augmented_nodes                                       #
-    # ------------------------------------------------------------------------- #
-    # Rip each table into table segments and its linked passage nodes.          #
-    # For each table segment, put its content and its linked passages into the  #
-    #   prompt, and get the response from the LLM.                              #
-    # Parse the response, then select the table segments and its linked         #
-    #   passages into a dictionary (a list of them is returned).                #
-    #############################################################################
-    # def select_table_old_segments(self, nl_question, table_key_to_augmented_nodes):
-    #     prompt_list = []
-    #     table_key_list = []
-    #     table_id_to_linked_passage_ids = {}
-    #     for table_key, table_segment_to_augmented_nodes in table_key_to_augmented_nodes.items():
-    #         if table_key not in table_id_to_linked_passage_ids:
-    #             table_id_to_linked_passage_ids[table_key] = {}
-    #
-    #         linked_passage_info = self.table_chunk_id_to_linked_passages[self.table_key_to_content[table_key]['chunk_id']]
-    #         table_title = linked_passage_info['question'].split(' [SEP] ')[0]
-    #         table_column_name = linked_passage_info['question'].split(' [SEP] ')[-1].split('\n')[0]
-    #         table_rows = linked_passage_info['question'].split(' [SEP] ')[-1].split('\n')[1:]
-    #         table_rows = [row for row in table_rows if row != ""]
-    #         table_info = {"title": table_title, "column_name": table_column_name, "rows": table_rows}
-    #         linked_passages = linked_passage_info['results']
-    #
-    #         row_id_to_linked_passage_contents = {}
-    #         for linked_passage_info in linked_passages:
-    #             row_id = str(linked_passage_info['row'])
-    #             if row_id not in row_id_to_linked_passage_contents:
-    #                 row_id_to_linked_passage_contents[row_id] = []
-    #
-    #             if row_id not in table_id_to_linked_passage_ids[table_key]:
-    #                 table_id_to_linked_passage_ids[table_key][row_id] = []
-    #
-    #             try:
-    #                 row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[linked_passage_info['retrieved'][0]]['text'])
-    #                 table_id_to_linked_passage_ids[table_key][row_id].append([linked_passage_info['retrieved'][0], 'entity_linking'])
-    #             except:
-    #                 continue
-    #
-    #         for row_id, augmented_nodes in table_segment_to_augmented_nodes.items():
-    #             if row_id not in row_id_to_linked_passage_contents:
-    #                 row_id_to_linked_passage_contents[row_id] = []
-    #
-    #             if row_id not in table_id_to_linked_passage_ids[table_key]:
-    #                 table_id_to_linked_passage_ids[table_key][row_id] = []
-    #
-    #             for augmented_node in list(set(augmented_nodes)):
-    #                 try:
-    #                     row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[augmented_node]['text'])
-    #                     table_id_to_linked_passage_ids[table_key][row_id].append([augmented_node, 'passage_node_augmentation'])
-    #                 except:
-    #                     continue
-    #
-    #         ######################################################################################################
-    #
-    #         table_and_linked_passages = self.get_table_and_linked_passages(table_info, row_id_to_linked_passage_contents)
-    #         contents_for_prompt = {'question': nl_question, 'table_and_linked_passages': table_and_linked_passages}
-    #         prompt = self.get_prompt(contents_for_prompt)
-    #         prompt_list.append(prompt)
-    #         table_key_list.append(table_key)
-    #
-    #     responses = self.llm.generate(
-    #             prompt_list,
-    #             vllm.SamplingParams(
-    #                 n = 1,  # Number of output sequences to return for each prompt.
-    #                 top_p = 0.9,  # Float that controls the cumulative probability of the top tokens to consider.
-    #                 temperature = 0.5,  # randomness of the sampling
-    #                 skip_special_tokens = True,  # Whether to skip special tokens in the output.
-    #                 max_tokens = 64,  # Maximum number of tokens to generate per output sequence.
-    #                 logprobs = 1
-    #             ),
-    #             use_tqdm = False
-    #         )
-    #
-    #     selected_table_segment_list = []
-    #     for table_key, response in zip(table_key_list, responses):
-    #         selected_rows = response.outputs[0].text
-    #         try:
-    #             selected_rows = ast.literal_eval(selected_rows)
-    #             selected_rows = [string.strip() for string in selected_rows]
-    #         except:
-    #             selected_rows = [selected_rows.strip()]
-    #
-    #         for selected_row in selected_rows:
-    #             try:
-    #                 row_id = selected_row.split('_')[1]
-    #                 row_id = str(int(row_id) - 1)
-    #                 _ = table_id_to_linked_passage_ids[table_key][str(row_id)]
-    #             except:
-    #                 continue
-    #
-    #             selected_table_segment_list.append({"table_segment_node_id": f"{table_key}_{row_id}", "linked_passages": table_id_to_linked_passage_ids[table_key][str(row_id)]})
-    #
-    #     return selected_table_segment_list
-    
 
     
     #############################################################################
@@ -891,7 +793,7 @@ class GraphQueryEngine:
             row_id = int(table_segment_node_id.split('_')[1])
             table_rows = table['text'].split('\n')
             column_name = table_rows[0]
-            row_values = table_rows[row_id+1]
+            row_values = table_rows[row_id + 1]
             table_segment_text = column_name + '\n' + row_values
             table_segment_content = {"title": table_title, "content": table_segment_text}
             linked_passage_contents = []
@@ -903,7 +805,10 @@ class GraphQueryEngine:
             graph = {"table_segment": table_segment_content, "linked_passages": linked_passage_contents}
 
             table_segment = graph['table_segment']
-            table_segment_content = f"Table Title: {table_segment['title']}" + "\n" + table_segment['content'].replace(' , ', '[special tag]').replace(', ', ' | ').replace('[special tag]', ' , ')
+            table_segment_content = f"Table Title: {table_segment['title']}" + "\n" + table_segment['content']\
+                                                                                                    .replace(' , ', '[special tag]')\
+                                                                                                    .replace(', ', ' | ')\
+                                                                                                    .replace('[special tag]', ' , ')
             
             linked_passages = graph['linked_passages']
             linked_passage_contents = ""
@@ -911,7 +816,7 @@ class GraphQueryEngine:
                 title = linked_passage['title']
                 content = linked_passage['content']
                 tokenized_content = self.tokenizer.encode(content)
-                trimmed_tokenized_content = tokenized_content[:128]
+                trimmed_tokenized_content = tokenized_content[ : PASSAGE_TRIM_LENGTH]
                 trimmed_content = self.tokenizer.decode(trimmed_tokenized_content)
                 linked_passage_contents += f"Title: {title}. Content: {trimmed_content}\n\n"
             contents_for_prompt = {"question": nl_question, "table_segment": table_segment_content, "linked_passages": linked_passage_contents}
@@ -921,17 +826,17 @@ class GraphQueryEngine:
         
         # 2. Run LLM
         responses = self.llm.generate(
-                prompt_list,
-                vllm.SamplingParams(
-                    n = 1,  # Number of output sequences to return for each prompt.
-                    top_p = 0.9,  # Float that controls the cumulative probability of the top tokens to consider.
-                    temperature = 0.5,  # randomness of the sampling
-                    skip_special_tokens = True,  # Whether to skip special tokens in the output.
-                    max_tokens = 128,  # Maximum number of tokens to generate per output sequence.
-                    logprobs = 1
-                ),
-                use_tqdm = False
-            )
+                                    prompt_list,
+                                    vllm.SamplingParams(
+                                        n = 1,  # Number of output sequences to return for each prompt.
+                                        top_p = 0.9,  # Float that controls the cumulative probability of the top tokens to consider.
+                                        temperature = 0.5,  # randomness of the sampling
+                                        skip_special_tokens = True,  # Whether to skip special tokens in the output.
+                                        max_tokens = 128,  # Maximum number of tokens to generate per output sequence.
+                                        logprobs = 1
+                                    ),
+                                    use_tqdm = False
+                                )
         
         # 3. Parse LLM results and add the top 
         for table_segment_node_id, response in zip(table_segment_node_id_list, responses):
@@ -941,9 +846,8 @@ class GraphQueryEngine:
             
             for selected_passage_id in selected_passage_id_list:
                 if selected_passage_id not in self.passage_key_to_content: continue
-                                                                                                               # Score
-                self.add_node(integrated_graph, 'table segment', table_segment_node_id, selected_passage_id,   1000000, 'llm_based_selection')
-                self.add_node(integrated_graph, 'passage',       selected_passage_id,   table_segment_node_id, 1000000, 'llm_based_selection')
+                self.add_node(integrated_graph, 'table segment', table_segment_node_id, selected_passage_id,   LLM_GIVEN_EDGE_SCORE, 'llm_selected')
+                self.add_node(integrated_graph, 'passage',       selected_passage_id,   table_segment_node_id, LLM_GIVEN_EDGE_SCORE, 'llm_selected')
     
 
     
@@ -1007,35 +911,7 @@ class GraphQueryEngine:
         return prompt
     
     
-    
-    
-    
-    #############################################################################
-    # DeleteNodes                                                               #
-    # InOut: graph                                                              #
-    # Input: node_list                                                          #
-    # ------------------------------------------------------------------------- #
-    # Not used                                                                  #
-    #############################################################################
-    def delete_nodes(self, graph, node_list):
-        # Convert node_list to a set for O(1) average time complexity lookups
-        node_set = set(node_list)
 
-        # Remove nodes and update linked nodes in one pass
-        nodes_to_delete = []
-
-        for node_id in list(graph.keys()):  # list(graph.keys()) to avoid runtime errors during deletion
-            if node_id in node_set:
-                del graph[node_id]
-            else:
-                graph[node_id]['linked_nodes'] = [linked_node for linked_node in graph[node_id]['linked_nodes'] if linked_node[0] not in node_set]
-                if not graph[node_id]['linked_nodes']:
-                    nodes_to_delete.append(node_id)
-
-        # Delete nodes that are not linked to any other node
-        for node_id in nodes_to_delete:
-            del graph[node_id]
-    
     
     
     
@@ -1056,12 +932,9 @@ class GraphQueryEngine:
 # def evaluate(retrieved_graph_list, qa_dataset, graph_query_engine):
 def evaluate(retrieved_graph, qa_data, graph_query_engine):
     
-    recall_list = []
-    error_cases = {}
     table_key_to_content = graph_query_engine.table_key_to_content
     passage_key_to_content = graph_query_engine.passage_key_to_content
     filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1"]
-    
     
     # 1. Revise retrieved graph
     revised_retrieved_graph = {}
@@ -1111,7 +984,7 @@ def evaluate(retrieved_graph, qa_data, graph_query_engine):
             if table_id not in retrieved_table_set:
                 retrieved_table_set.add(table_id)
                 
-                if edge_count == 50:
+                if edge_count == FINAL_MAX_EDGE_COUNT:
                     continue
                 
                 context += table['text']
@@ -1134,7 +1007,7 @@ def evaluate(retrieved_graph, qa_data, graph_query_engine):
             
             edge_text = table_segment_text + '\n' + passage_text
             
-            if edge_count == 50:
+            if edge_count == FINAL_MAX_EDGE_COUNT:
                 continue
             
             edge_count += 1
@@ -1145,13 +1018,13 @@ def evaluate(retrieved_graph, qa_data, graph_query_engine):
             if node_id in retrieved_passage_set:
                 continue
 
-            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_reranking', 0, 0))
+            max_linked_node_id, _, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default = (None, 0, 'edge_reranking', 0, 0))
             table_id = max_linked_node_id.split('_')[0]
             table = table_key_to_content[table_id]
             
             if table_id not in retrieved_table_set:
                 retrieved_table_set.add(table_id)
-                if edge_count == 50:
+                if edge_count == FINAL_MAX_EDGE_COUNT:
                     continue
                 context += table['text']
                 edge_count += 1
@@ -1162,7 +1035,7 @@ def evaluate(retrieved_graph, qa_data, graph_query_engine):
             row_values = table_rows[row_id+1]
             table_segment_text = column_name + '\n' + row_values
             
-            if edge_count == 50:
+            if edge_count == FINAL_MAX_EDGE_COUNT:
                 continue
 
             retrieved_passage_set.add(node_id)

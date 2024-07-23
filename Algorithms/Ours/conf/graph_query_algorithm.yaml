@@ -58,7 +58,7 @@ top_k_of_table_segment_augmentation: 10
 top_k_of_passage_augmentation: 0
 top_k_of_table_segment: 0
 top_k_of_passage: 2
-top_k_of_table_select_w_llm: 3
+top_k_of_table_select_w_llm: 2
 node_scoring_method: max
 batch_size: 512
 
