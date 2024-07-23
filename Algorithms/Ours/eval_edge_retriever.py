@@ -16,24 +16,17 @@ from FlagEmbedding import LayerWiseFlagLLMReranker
 
 class GraphQueryEngine:
     def __init__(self, cfg):
-        # mongodb setup
-        client = MongoClient(f"mongodb://localhost:{cfg.port}/", username=cfg.username, password=str(cfg.password))
-        mongodb = client[cfg.dbname]
-
-        # load dataset
-        ## two node graphs
-        edge_contents = mongodb[cfg.edge_name]
-        num_of_edges = edge_contents.count_documents({})
-        self.edge_key_to_content = {}
-        self.table_key_to_edge_keys = {}
-        print(f"Loading {num_of_edges} graphs...")
-        for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
-            self.edge_key_to_content[edge_content['chunk_id']] = edge_content
+        edge_contents = []
+        with open(cfg.edge_dataset_path, "r") as file:
+            for line in file:
+                edge_contents.append(json.loads(line))
+        num_of_edges = len(edge_contents)
             
-            if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
-                self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
+        self.edge_key_to_content = {}
+        print(f"Loading {num_of_edges} graphs...")
 
-            self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
+        for id, edge_content in enumerate(edge_contents):
+            self.edge_key_to_content[edge_content['chunk_id']] = edge_content
 
         # load retrievers
         ## id mappings
@@ -67,7 +60,7 @@ class GraphQueryEngine:
     
     def retrieve_edges(self, nl_question):
         
-        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
+        retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 1000)
         
         retrieved_edge_id_list = retrieved_edges_info[0]
         retrieved_edge_score_list = retrieved_edges_info[2]
@@ -236,7 +229,7 @@ class GraphQueryEngine:
 @hydra.main(config_path="conf", config_name="graph_query_algorithm")
 def main(cfg: DictConfig):
     
-    retrieved_graph_path = "/mnt/sdd/shpark/edge_retrieval_v2_fine_tuned_bsize_512_10000.json"
+    retrieved_graph_path = "/mnt/sdd/shpark/edge_retrieval_v2_fine_tuned_bsize_512_1000.json"
     
     # load qa dataset
     print(f"Loading qa dataset...")

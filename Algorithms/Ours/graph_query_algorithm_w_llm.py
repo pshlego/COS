@@ -76,7 +76,7 @@ class GraphQueryEngine:
         
         ## large language model
         self.llm = vllm.LLM(
-            cfg.llm_path,
+            cfg.llm_checkpoint_path,
             worker_use_ray=True,
             tensor_parallel_size=COK_VLLM_TENSOR_PARALLEL_SIZE, 
             gpu_memory_utilization=COK_VLLM_GPU_MEMORY_UTILIZATION, 

@@ -1,2 +1,2 @@
-export CUDA_VISIBLE_DEVICES=2,3 
-kernprof -l -v /home/shpark/OTT_QA_Workspace/Algorithms/Ours/graph_query_algorithm_w_llm.py integrated_graph_save_path=/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/finetuned_reranker_baai_ckpt_400_rerank_top_150_w_llm.json query_time_save_path=/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/finetuned_reranker_baai_ckpt_400_rerank_top_150_w_llm_time.json
+export CUDA_VISIBLE_DEVICES=0
+kernprof -l -v /home/shpark/OTT_QA_Workspace/Algorithms/Ours/graph_query_algorithm.py
