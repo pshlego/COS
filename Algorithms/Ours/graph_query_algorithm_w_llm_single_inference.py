@@ -224,6 +224,13 @@ class GraphQueryEngine:
     
     
     
+    
+    
+    
+    
+    
+    
+    
     #############################################################################
     # Query                                                                     #
     # Input: NL Question                                                        #
@@ -585,7 +592,7 @@ class GraphQueryEngine:
     # Input: table_key_to_augmented_nodes                                       #
     # Output: selected_node_list                                                #
     # ------------------------------------------------------------------------- #
-    # ??? 
+    # ???
     #############################################################################
     # @profile
     def select_nodes(self, nl_question, table_key_to_augmented_nodes):
@@ -634,7 +641,7 @@ class GraphQueryEngine:
                         continue
             
             table_and_linked_passages = self.get_table_and_linked_passages(table_info, row_id_to_linked_passage_contents)
-            contents_for_prompt = {'question':nl_question, 'table_and_linked_passages': table_and_linked_passages}
+            contents_for_prompt = {'question': nl_question, 'table_and_linked_passages': table_and_linked_passages}
             prompt = self.get_prompt(contents_for_prompt)
             prompt_list.append(prompt)
             table_key_list.append(table_key)
@@ -642,12 +649,12 @@ class GraphQueryEngine:
         responses = self.llm.generate(
                 prompt_list,
                 vllm.SamplingParams(
-                    n=1,  # Number of output sequences to return for each prompt.
-                    top_p=0.9,  # Float that controls the cumulative probability of the top tokens to consider.
-                    temperature=0.5,  # randomness of the sampling
-                    skip_special_tokens=True,  # Whether to skip special tokens in the output.
-                    max_tokens=64,  # Maximum number of tokens to generate per output sequence.
-                    logprobs=1
+                    n = 1,  # Number of output sequences to return for each prompt.
+                    top_p = 0.9,  # Float that controls the cumulative probability of the top tokens to consider.
+                    temperature = 0.5,  # randomness of the sampling
+                    skip_special_tokens = True,  # Whether to skip special tokens in the output.
+                    max_tokens = 64,  # Maximum number of tokens to generate per output sequence.
+                    logprobs = 1
                 ),
                 use_tqdm = False
             )

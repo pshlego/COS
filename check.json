@@ -1,0 +1,120 @@
+{
+    "nl question": "Which nation participating in the 2018 Emerging Nations World Championship had the lowest RLIF rank number ?",
+    "before llm": {
+        "325918": {
+            "0": [
+                "Vanuatu national cricket team",
+                "Vanuatu",
+                "Lionel Harbin",
+                "Alehana Mara"
+            ]
+        },
+        "325917": {
+            "6": [
+                "Shane Gray",
+                "Poland",
+                "Payne Haas",
+                "Vietnam",
+                "Paul Sheedy",
+                "Marcus Smart",
+                "Philippines"
+            ],
+            "3": [
+                "Tommi Hovi",
+                "Gehamat Shibasaki",
+                "Japan",
+                "Malta national basketball team",
+                "Japan national football team"
+            ],
+            "9": [
+                "Emre Guler",
+                "Cory Denniss",
+                "Aidan Sezer",
+                "Jansin Turgut"
+            ],
+            "2": [
+                "Stuart Flanagan",
+                "Jonathan Wilson (writer)",
+                "Hungary",
+                "Japan",
+                "Austria"
+            ],
+            "4": [
+                "Shane McDonald",
+                "United States national rugby union team",
+                "Tyler Cassel",
+                "Joseph Cassar (diplomat)",
+                "Georgina Cassar",
+                "Sam Stone (rugby league)",
+                "Jarrod Sammut"
+            ],
+            "0": [
+                "Steve Georgallis",
+                "United States national rugby union team",
+                "Greece",
+                "Jordan Meads",
+                "Stefanos Bastas",
+                "Michael Korkidas"
+            ],
+            "1": [
+                "Hong Kong",
+                "Kayleigh Green",
+                "Hong Kong national handball team",
+                "Hungary national handball team",
+                "China"
+            ],
+            "5": [
+                "Niue",
+                "Indonesia",
+                "Eddie Paea",
+                "Zebastian Lucky Luisi",
+                "Sione Tovo",
+                "Philippines",
+                "Brendan Joyce"
+            ],
+            "8": [
+                "Turkey",
+                "South America",
+                "John Sinisa",
+                "Eric Devendorf",
+                "Solomon Islands",
+                "Solomon Islands national basketball team"
+            ],
+            "7": [
+                "Harry Siejka",
+                "Poland",
+                "Joe Lee (squash player)",
+                "Polish language"
+            ]
+        },
+        "557343": {
+            "4": [],
+            "3": [],
+            "5": [],
+            "8": [],
+            "10": [
+                "AZE"
+            ],
+            "6": [],
+            "1": [],
+            "2": [],
+            "9": [],
+            "7": [],
+            "0": []
+        },
+        "425108": {
+            "7": [],
+            "5": [],
+            "4": [],
+            "6": [],
+            "2": [],
+            "3": [
+                "EST"
+            ],
+            "0": [],
+            "1": [],
+            "8": [],
+            "9": []
+        }
+    }
+}
