@@ -9,12 +9,12 @@ qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_
 edge_dataset_path: /mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_edge_1.jsonl
 table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
 passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
-entity_linking_result_name: table_chunks_to_passages_cos_table_passage
+entity_linking_dataset_path: /mnt/sdd/shpark/table_chunks_to_passages_cos_table_passage.jsonl
 
 # output
-integrated_graph_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/original_reduction.json
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/original_reduction_time.json
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/original_reduction_error.json
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256_time.json
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256_error.json
 
 # retriever
 ## id to chunk id
@@ -44,14 +44,14 @@ llm_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGe
 nbits: 2
 
 # experimental setting
-top_k_of_edge: 300
-top_k_of_table_segment_augmentation: 5
+top_k_of_edge: 150
+top_k_of_table_segment_augmentation: 10
 top_k_of_passage_augmentation: 0
 top_k_of_table_segment: 0
 top_k_of_passage: 2
 top_k_of_table_select_w_llm: 3
 node_scoring_method: max
-batch_size: 100
+edge_reranker_batch_size: 150
 
 # table retrieval setting
 defaults:

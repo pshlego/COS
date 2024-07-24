@@ -26,7 +26,7 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
     for node_rank, (node_id, node_info) in enumerate(sorted_retrieved_graph):
         node_is_added = False
         if node_info['type'] == 'table segment':
-            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 2) and (x[3] < 2)) or x[2] == 'edge_reranking']
+            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < query_topk) and (x[4] < augment_topk)) or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 2) and (x[3] < 2)) or x[2] in ['edge_reranking']]#, 'llm_selected']]
             if len(linked_nodes) == 0:
                 continue
             else:
@@ -80,7 +80,7 @@ def get_context(retrieved_graph, table_key_to_content, passage_key_to_content, t
                 final_node_rank += 1
 
         elif node_info['type'] == 'passage':
-            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 2) and (x[4] < 2)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] == 'edge_reranking']
+            linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 2) and (x[4] < 2)) or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < query_topk) and (x[3] < augment_topk)) or x[2] in ['edge_reranking']]#, 'llm_selected']]
 
             if len(linked_nodes) == 0:
                 continue
@@ -142,18 +142,19 @@ if __name__ == '__main__':
     elif filter_type == 'passage':
         filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_1', 'edge_reranking']
     elif filter_type == 'rerank':
-        filtered_retrieval_type = ['edge_reranking', 'passage_node_augmentation_1']
+        filtered_retrieval_type = ['edge_reranking', 'passage_node_augmentation_1']#, 'llm_selected']
     else:
         filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_1', 'table_segment_node_augmentation']
         
-    error_cases_path = f"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_full_layer_wo_table_retrieval.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json" #f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"#"/mnt/sdd/shpark/experimental_results/error_case_edge/error_cases_passage_10_2_v2_100.json"#"/mnt/sdd/shpark/experimental_results/error_case_edge/error_cases_none_1_1_v2.json" #f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"
+    #error_cases_path = f"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_full_layer_wo_table_retrieval.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json" #f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"#"/mnt/sdd/shpark/experimental_results/error_case_edge/error_cases_passage_10_2_v2_100.json"#"/mnt/sdd/shpark/experimental_results/error_case_edge/error_cases_none_1_1_v2.json" #f"/mnt/sdd/shpark/experimental_results/error_cases/150_10_2_w_reranking.json"
+    error_cases_path = "/home/shpark/OTT_QA_Workspace/error_cases_1.json"
     data_graph_error_cases_path = "/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_rerank_full_layer_wo_table_retrieval.json" #"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_reranker.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases.json"#"/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_reranker.json"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
-    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/full_table_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
-    table_segment_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/table_segment_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
-    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/passage_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
-    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_1/both_error_cases_reranking_last_baai_rerank_full_layer_wo_table_retrieval_error.json"
+    table_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_final_wo_llm/full_table_error_cases.json"
+    table_segment_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_final_wo_llm/table_segment_error_cases.json"
+    passage_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_final_wo_llm/passage_error_cases.json"
+    both_error_case_result_path = "/home/shpark/OTT_QA_Workspace/error_case/error_case_final_wo_llm/both_error_cases.json"
     gold_graph_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/GroundTruth/wiki_hyperlink.json"
     error_qid_list = []
     
@@ -181,7 +182,9 @@ if __name__ == '__main__':
     table_error_cases = {}
     table_segment_error_cases = {}
     both_error_cases = {}
-    for qid, retrieval_error_case in tqdm(retrieval_error_cases.items()):
+    #for qid, retrieval_error_case in tqdm(retrieval_error_cases.items()):
+    for retrieval_error_case in tqdm(retrieval_error_cases):
+        qid = retrieval_error_case['id']
         # if qid not in data_graph_error_case_id_list:
         #     continue
         answers = retrieval_error_case['answers']
