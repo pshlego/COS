@@ -7,6 +7,21 @@ from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
 FINAL_MAX_EDGE_COUNT = 50
 
+def dump_jsonl(data, path):
+    """
+    Dumps a list of dictionaries to a JSON Lines file.
+
+    :param data: List of dictionaries to be dumped into JSONL.
+    :param path: Path where the JSONL file will be saved.
+    """
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            for entry in data:
+                f.write(json.dumps(entry) + '\n')
+        print(f"Data successfully written to {path}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        
 def read_jsonl(file_path):
     data = []
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -19,25 +34,28 @@ def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_cont
     
     # table_key_to_content = graph_query_engine.table_key_to_content
     # passage_key_to_content = graph_query_engine.passage_key_to_content
-    filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1"]
-    filtered_retrieval_type_1 = ['edge_reranking']
+    # filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1"]
+    # filtered_retrieval_type_1 = ['edge_reranking']
     # filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1", "llm_selected"]
     # filtered_retrieval_type_1 = ['edge_reranking', "llm_selected"]
+    filtered_retrieval_type = ['edge_retrieval', "passage_node_augmentation_0", "llm_selected"]
+    # filtered_retrieval_type = ['edge_retrieval', "passage_node_augmentation_1"]
+    filtered_retrieval_type_1 = ['edge_retrieval', "llm_selected"]
     # 1. Revise retrieved graph
     revised_retrieved_graph = {}
     for node_id, node_info in retrieved_graph.items():                  
 
         if node_info['type'] == 'table segment':
             linked_nodes = [x for x in node_info['linked_nodes'] 
-                                if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[3] < 10) and (x[4] < 2)) 
+                                if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_0' and (x[3] < 10) and (x[4] < 2)) 
                                     or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 1) and (x[3] < 1)) 
                                     or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                             ]
         elif node_info['type'] == 'passage':
             linked_nodes = [x for x in node_info['linked_nodes'] 
                                 if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 1) and (x[4] < 1)) 
-                                or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < 10) and (x[3] < 2)) 
-                                or x[2] == filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
+                                or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_0' and (x[4] < 10) and (x[3] < 2)) 
+                                or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                             ]
         if len(linked_nodes) == 0: continue
         
@@ -163,8 +181,8 @@ def remove_accents_and_non_ascii(text):
 
 if __name__ == '__main__':
     # Test
-    #query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_300_5_0_0_2_1_150_28_256.jsonl"
-    query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256 copy.jsonl"
+    query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/wo_step_2.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
+    #query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256 copy.jsonl"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     
@@ -187,9 +205,8 @@ if __name__ == '__main__':
     for passage_content in tqdm(passage_contents):
         passage_key_to_content[passage_content['title']] = passage_content
     print("4. Processing passages complete!", end = "\n\n")
-    table_key_to_content
-    data = read_jsonl(query_results_path)
     
+    data = read_jsonl(query_results_path)
     recall_list = []
     error_case_list = [] 
     for datum in data:
@@ -201,8 +218,8 @@ if __name__ == '__main__':
         if recall == 0:
             error_case_list.append(error_case)
     print("Recall: ", sum(recall_list)/len(recall_list))
-    with open("error_cases_0_2.json", "w") as file:
-        json.dump(error_case_list, file, indent = 4)
+    # with open("error_cases_0_2.json", "w") as file:
+    #     json.dump(error_case_list, file, indent = 4)
         
 # len(error_case_list)
 # 145

@@ -46,21 +46,49 @@ set_seed(0)
 
 @hydra.main(config_path = "conf", config_name = "graph_query_algorithm")
 def main(cfg: DictConfig):
+    filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0']
+    filtered_retrieval_type_1 = ['edge_retrieval']
     # load qa dataset
     print()
     print(f"[[ Loading qa dataset... ]]", end = "\n\n")
+    last_retrieved_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
     qa_dataset = json.load(open(cfg.qa_dataset_path))
+    last_retrieved_results = read_jsonl(last_retrieved_results_path)
     graph_query_engine = GraphQueryEngine(cfg)
     
     # query
     print(f"Start querying...")
     for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
+        revised_retrieved_graph = {}
+        last_retrieved_result = last_retrieved_results[qidx]['retrieved graph']
+        for node_id, node_info in last_retrieved_result.items():
+            if node_info['type'] == 'table segment':
+                linked_nodes = [x for x in node_info['linked_nodes'] 
+                                    if x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_0' and (x[3] < 10) and (x[4] < 2)) 
+                                        or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 1) and (x[3] < 1)) 
+                                        or x[2] in filtered_retrieval_type_1
+                                ]
+            elif node_info['type'] == 'passage':
+                linked_nodes = [x for x in node_info['linked_nodes'] 
+                                    if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 1) and (x[4] < 1)) 
+                                    or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_0' and (x[4] < 10) and (x[3] < 2)) 
+                                    or x[2] in filtered_retrieval_type_1
+                                ]
+            if len(linked_nodes) == 0: continue
+            
+            revised_retrieved_graph[node_id] = copy.deepcopy(node_info)
+            revised_retrieved_graph[node_id]['linked_nodes'] = linked_nodes
+            
+            linked_scores = [linked_node[1] for linked_node in linked_nodes]
+            node_score = max(linked_scores)
+            revised_retrieved_graph[node_id]['score'] = node_score
         
+        retrieved_graph = revised_retrieved_graph
         nl_question = qa_datum['question']
         answers = qa_datum['answers']
         
         init_time = time.time()
-        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2)
+        retrieved_graph = graph_query_engine.query(nl_question, retrieval_time = 2, retrieved_graph = retrieved_graph)
         end_time = time.time()
         qury_time = end_time - init_time
         
@@ -235,65 +263,107 @@ class GraphQueryEngine:
     #                           question)                                       #  
     # ------------------------------------------------------------------------- # 
     #############################################################################
-    @profile
-    def query(self, nl_question, retrieval_time = 2):
+    #@profile
+    def query(self, nl_question, retrieval_time = 2, retrieved_graph = None):
         
-        # 1. Edge Retrieval
-        retrieved_edges = self.retrieve_edges(nl_question)
-        
-        # 2. Graph Integration
-        integrated_graph = self.integrate_graphs(retrieved_edges)
+        # if retrieved_graph is not None:
+        integrated_graph = retrieved_graph
         retrieval_type = None
+        # else:
+        #     # 1. Edge Retrieval
+        #     retrieved_edges = self.retrieve_edges(nl_question)
+            
+        #     # 2. Graph Integration
+        #     integrated_graph = self.integrate_graphs(retrieved_edges)
+        #     retrieval_type = None
+
+        #     topk_table_segment_nodes = []
+        #     topk_passage_nodes = []
+        #     for node_id, node_info in integrated_graph.items():
+        #         if node_info['type'] == 'table segment':
+        #             topk_table_segment_nodes.append([node_id, node_info['score']])
+        #         elif node_info['type'] == 'passage':
+        #             topk_passage_nodes.append([node_id, node_info['score']])
+
+        #         # Default: 10
+        #     topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_segment_augmentation]
+        #         # Default: 0
+        #     topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
+            
+            
+        #     # Expanded Query Retrieval
+        #         # 3.1 Passage Node Augmentation
+        #     self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes,  'table segment', 'passage', 0)
+        #         # 3.2 Table Segment Node Augmentation
+        #     self.augment_node(integrated_graph, nl_question, topk_passage_nodes,        'passage', 'table segment', 0)
+            
+        #     self.assign_scores(integrated_graph, retrieval_type)
+
+        _, _, table_id_to_linked_nodes = self.get_table(integrated_graph)
         
-        for i in range(retrieval_time):
-            
-            # From second iteration
-            if i >= 1:
-                self.reranking_edges(nl_question, integrated_graph)
-                retrieval_type = 'edge_reranking'
-                self.assign_scores(integrated_graph, retrieval_type)
-            
-            # Is not last iteration
-            if i < retrieval_time:
-                topk_table_segment_nodes = []
-                topk_passage_nodes = []
-                for node_id, node_info in integrated_graph.items():
-                    if node_info['type'] == 'table segment':
-                        topk_table_segment_nodes.append([node_id, node_info['score']])
-                    elif node_info['type'] == 'passage':
-                        topk_passage_nodes.append([node_id, node_info['score']])
+        table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info \
+                                            = self.combine_linked_passages(table_id_to_linked_nodes)
+        
+        
+        selected_table_segment_list = self.select_table_segments(
+                                                    nl_question, 
+                                                    table_id_to_row_id_to_linked_passage_ids,
+                                                    table_id_to_table_info
+                                                )
+        self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
+        
+        self.assign_scores(integrated_graph, retrieval_type)
+        retrieved_graphs = integrated_graph
 
-                    # Default: 10
-                topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_segment_augmentation]
-                    # Default: 0
-                topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
-                
-                
-                # Expanded Query Retrieval
-                    # 3.1 Passage Node Augmentation
-                self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes,  'table segment', 'passage', i)
-                    # 3.2 Table Segment Node Augmentation
-                self.augment_node(integrated_graph, nl_question, topk_passage_nodes,        'passage', 'table segment', i)
-                
-                self.assign_scores(integrated_graph, retrieval_type)
-
-            # Is last iteration
-            if i == retrieval_time - 1:
-                _, _, table_id_to_linked_nodes = self.get_table(integrated_graph)
-                
-                table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info \
-                                                    = self.combine_linked_passages(table_id_to_linked_nodes)
-                
-                
-                selected_table_segment_list = self.select_table_segments(
-                                                            nl_question, 
-                                                            table_id_to_row_id_to_linked_passage_ids,
-                                                            table_id_to_table_info
-                                                        )
-                self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
+        # for i in range(retrieval_time):
             
-            self.assign_scores(integrated_graph, retrieval_type)
-            retrieved_graphs = integrated_graph
+        #     # From second iteration
+        #     if i >= 1:
+        #         self.reranking_edges(nl_question, integrated_graph)
+        #         retrieval_type = 'edge_reranking'
+        #         self.assign_scores(integrated_graph, retrieval_type)
+            
+        #     # Is not last iteration
+        #     if i < retrieval_time:
+        #         topk_table_segment_nodes = []
+        #         topk_passage_nodes = []
+        #         for node_id, node_info in integrated_graph.items():
+        #             if node_info['type'] == 'table segment':
+        #                 topk_table_segment_nodes.append([node_id, node_info['score']])
+        #             elif node_info['type'] == 'passage':
+        #                 topk_passage_nodes.append([node_id, node_info['score']])
+
+        #             # Default: 10
+        #         topk_table_segment_nodes = sorted(topk_table_segment_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_table_segment_augmentation]
+        #             # Default: 0
+        #         topk_passage_nodes = sorted(topk_passage_nodes, key=lambda x: x[1], reverse=True)[:self.top_k_of_passage_augmentation]
+                
+                
+        #         # Expanded Query Retrieval
+        #             # 3.1 Passage Node Augmentation
+        #         self.augment_node(integrated_graph, nl_question, topk_table_segment_nodes,  'table segment', 'passage', i)
+        #             # 3.2 Table Segment Node Augmentation
+        #         self.augment_node(integrated_graph, nl_question, topk_passage_nodes,        'passage', 'table segment', i)
+                
+        #         self.assign_scores(integrated_graph, retrieval_type)
+
+        #     # Is last iteration
+        #     if i == retrieval_time - 1:
+        #         _, _, table_id_to_linked_nodes = self.get_table(integrated_graph)
+                
+        #         table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info \
+        #                                             = self.combine_linked_passages(table_id_to_linked_nodes)
+                
+                
+        #         selected_table_segment_list = self.select_table_segments(
+        #                                                     nl_question, 
+        #                                                     table_id_to_row_id_to_linked_passage_ids,
+        #                                                     table_id_to_table_info
+        #                                                 )
+        #         self.select_passages(nl_question, selected_table_segment_list, integrated_graph)
+            
+        #     self.assign_scores(integrated_graph, retrieval_type)
+        #     retrieved_graphs = integrated_graph
         
         return retrieved_graphs
     
@@ -316,7 +386,7 @@ class GraphQueryEngine:
     # Retrieve `top_k_of_edge` number of edges (table segment - passage)        #
     # relevant to the input NL question.                                        #
     #############################################################################
-    @profile
+    #@profile
     def retrieve_edges(self, nl_question):
         
         retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
@@ -325,7 +395,7 @@ class GraphQueryEngine:
         retrieved_edge_score_list = retrieved_edges_info[2]
         
         retrieved_edge_contents = []
-        for graphidx, retrieved_id in enumerate(retrieved_edge_id_list):
+        for graphidx, retrieved_id in enumerate(retrieved_edge_id_list[:self.top_k_of_edge]):
             retrieved_edge_content = self.edge_key_to_content[self.id_to_edge_key[str(retrieved_id)]]
 
             # pass single node graph
@@ -334,9 +404,6 @@ class GraphQueryEngine:
             
             retrieved_edge_content['edge_score'] = retrieved_edge_score_list[graphidx]
             retrieved_edge_contents.append(retrieved_edge_content)
-            
-            if len(retrieved_edge_contents) == self.top_k_of_edge:
-                break
 
         return retrieved_edge_contents
 
@@ -350,7 +417,7 @@ class GraphQueryEngine:
     # nodes, via addNode function.                                              #
     # The nodes are assigned scores via `assign_scores` function.               #
     #############################################################################
-    @profile
+    #@profile
     def integrate_graphs(self, retrieved_graphs):
         integrated_graph = {}
         retrieval_type = 'edge_retrieval'
@@ -390,7 +457,7 @@ class GraphQueryEngine:
     # The scores are assigned via `addNode` function.                           #
     #############################################################################
     # TODO: change after on (add_node -> change score)
-    @profile
+    #@profile
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
@@ -453,7 +520,7 @@ class GraphQueryEngine:
     #  - mean: mean score of the linked nodes                                   #
     # The score is assigned in graph[node_id]["score"]                          #
     #############################################################################
-    @profile
+    #@profile
     def assign_scores(self, graph, retrieval_type = None):
         for node_id, node_info in graph.items():
             if retrieval_type is not None:
@@ -485,7 +552,7 @@ class GraphQueryEngine:
     # ------------------------------------------------------------------------- #
     # Add 20 edges for target nodes which are the top k nodes in the query      #
     #############################################################################
-    @profile
+    #@profile
     def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
         
         for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
@@ -643,7 +710,13 @@ class GraphQueryEngine:
                 
                 if row_id not in table_id_to_row_id_to_linked_passage_ids[table_id]:
                     table_id_to_row_id_to_linked_passage_ids[table_id][row_id] = []
-            
+
+                # try:
+                #     # row_id_to_linked_passage_contents[row_id].append(self.passage_key_to_content[linked_passage_info['retrieved'][0]])
+                #     table_id_to_row_id_to_linked_passage_ids[table_id][row_id].append(linked_passage_info['retrieved'][0])
+                # except:
+                #     continue                    
+
             for row_id, linked_nodes in table_segment_to_linked_nodes.items():
                 
                 if row_id not in table_id_to_row_id_to_linked_passage_ids[table_id]:
@@ -667,7 +740,7 @@ class GraphQueryEngine:
     # For each table, examine its entire table info and linked passages to pick #
     # the most relevant table segments, using the llm.                          #
     #############################################################################
-    @profile
+    #@profile
     def select_table_segments(self, nl_question, table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info):
         
         prompt_list = []
@@ -774,7 +847,7 @@ class GraphQueryEngine:
     # They are marked as `llm_based_selection`, and they are given edge scores  #
     #   of 100,000.                                                             #
     #############################################################################
-    @profile
+    #@profile
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         
         prompt_list = []
@@ -1145,7 +1218,12 @@ def disablePrint():
 def enablePrint():
     sys.stdout = sys.__stdout__
 
-
+def read_jsonl(file_path):
+    data = []
+    with open(file_path, 'r', encoding='utf-8') as file:
+        for line in file:
+            data.append(json.loads(line.strip()))
+    return data
 
 
 
