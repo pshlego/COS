@@ -61,7 +61,7 @@ class Indexer:
         assert overwrite in [True, False, 'reuse', 'resume', "force_silent_overwrite"]
 
         self.configure(collection=collection, index_name=name, resume=overwrite=='resume')
-        self.configure(nranks=4, bsize=256, partitions=None, doc_maxlen=512, query_maxlen=32) # nranks=1, bsize=64, doc_maxlen=220
+        self.configure(nranks=4, bsize=384, partitions=None, doc_maxlen=512, query_maxlen=32) # nranks=1, bsize=64, doc_maxlen=220
 
         self.index_path = self.config.index_path_
         index_does_not_exist = (not os.path.exists(self.config.index_path_))

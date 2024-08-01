@@ -235,7 +235,7 @@ class GraphQueryEngine:
     #                           question)                                       #  
     # ------------------------------------------------------------------------- # 
     #############################################################################
-    @profile
+    #@profile
     def query(self, nl_question, retrieval_time = 2):
         
         # 1. Edge Retrieval
@@ -316,7 +316,7 @@ class GraphQueryEngine:
     # Retrieve `top_k_of_edge` number of edges (table segment - passage)        #
     # relevant to the input NL question.                                        #
     #############################################################################
-    @profile
+    #@profile
     def retrieve_edges(self, nl_question):
         
         retrieved_edges_info = self.colbert_edge_retriever.search(nl_question, 10000)
@@ -350,7 +350,7 @@ class GraphQueryEngine:
     # nodes, via addNode function.                                              #
     # The nodes are assigned scores via `assign_scores` function.               #
     #############################################################################
-    @profile
+    #@profile
     def integrate_graphs(self, retrieved_graphs):
         integrated_graph = {}
         retrieval_type = 'edge_retrieval'
@@ -390,7 +390,7 @@ class GraphQueryEngine:
     # The scores are assigned via `addNode` function.                           #
     #############################################################################
     # TODO: change after on (add_node -> change score)
-    @profile
+    #@profile
     def reranking_edges(self, nl_question, retrieved_graphs):
         edges = []
         edges_set = set()
@@ -453,8 +453,9 @@ class GraphQueryEngine:
     #  - mean: mean score of the linked nodes                                   #
     # The score is assigned in graph[node_id]["score"]                          #
     #############################################################################
-    @profile
+    #@profile
     def assign_scores(self, graph, retrieval_type = None):
+        # Filter linked scores based on retrieval_type if provided
         for node_id, node_info in graph.items():
             if retrieval_type is not None:
                 filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'table_segment_node_augmentation_0']
@@ -462,14 +463,42 @@ class GraphQueryEngine:
             else:
                 linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
             
+            # Assign scores based on the selected method
             if self.node_scoring_method == 'min':
-                node_score = min(linked_scores)
+                node_score = min(linked_scores) if linked_scores else 0
             elif self.node_scoring_method == 'max':
-                node_score = max(linked_scores)
+                node_score = max(linked_scores) if linked_scores else 0
             elif self.node_scoring_method == 'mean':
-                node_score = sum(linked_scores) / len(linked_scores)
+                node_score = sum(linked_scores) / len(linked_scores) if linked_scores else 0
+            elif self.node_scoring_method == 'PageRank':
+                # Calculate PageRank for each node (simplified example)
+                page_rank_scores = self.calculate_pagerank(graph)
+                node_score = page_rank_scores.get(node_id, 0)
             
+            # Assign the computed score to the node
             graph[node_id]['score'] = node_score
+
+    def calculate_pagerank(self, graph, damping_factor=0.85, max_iterations=10, tol=1.0e-6):
+        # Initialize scores
+        n = len(graph)
+        ranks = {node_id: 1.0 / n for node_id in graph}
+        new_ranks = ranks.copy()
+
+        for _ in range(max_iterations):
+            for node_id in graph:
+                rank_sum = 0
+                for linked_node_id, linked_score, augment_type, source_rank, target_rank in graph[node_id]['linked_nodes']:
+                    if linked_node_id in ranks:
+                        rank_sum += ranks[linked_node_id] / len(graph[linked_node_id]['linked_nodes'])
+                new_ranks[node_id] = (1 - damping_factor) / n + damping_factor * rank_sum
+            
+            # Check for convergence
+            if max(abs(new_ranks[node_id] - ranks[node_id]) for node_id in graph) < tol:
+                break
+            
+            ranks = new_ranks.copy()
+        
+        return ranks
     
     
     
@@ -485,7 +514,7 @@ class GraphQueryEngine:
     # ------------------------------------------------------------------------- #
     # Add 20 edges for target nodes which are the top k nodes in the query      #
     #############################################################################
-    @profile
+    #@profile
     def augment_node(self, graph, nl_question, topk_query_nodes, query_node_type, retrieved_node_type, retrieval_time):
         
         for source_rank, (query_node_id, query_node_score) in enumerate(topk_query_nodes):
@@ -667,7 +696,7 @@ class GraphQueryEngine:
     # For each table, examine its entire table info and linked passages to pick #
     # the most relevant table segments, using the llm.                          #
     #############################################################################
-    @profile
+    #@profile
     def select_table_segments(self, nl_question, table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info):
         
         prompt_list = []
@@ -774,7 +803,7 @@ class GraphQueryEngine:
     # They are marked as `llm_based_selection`, and they are given edge scores  #
     #   of 100,000.                                                             #
     #############################################################################
-    @profile
+    #@profile
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         
         prompt_list = []

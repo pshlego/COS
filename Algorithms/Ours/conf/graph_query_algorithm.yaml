@@ -12,9 +12,9 @@ passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 entity_linking_dataset_path: /mnt/sdd/shpark/table_chunks_to_passages_cos_table_passage.jsonl
 
 # output
-final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256_time.json
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256_error.json
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/Table_Schema.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/Table_Schema_time.json
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/Table_Schema_error.json
 
 # retriever
 ## id to chunk id
