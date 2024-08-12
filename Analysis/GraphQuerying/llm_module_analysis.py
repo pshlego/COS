@@ -16,7 +16,7 @@ for generated_data_graph in tqdm(generated_data_graphs):
     for result in generated_data_graph['results']:
         table_key_to_linked_nodes[table_key].extend(result['retrieved'][:1])
 
-llm_error_cases_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/llm_based_framework.json"
+llm_error_cases_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/final_20_5.json"
 
 with open(llm_error_cases_path, 'r') as f:
     llm_error_cases = json.load(f)
@@ -24,6 +24,7 @@ with open(llm_error_cases_path, 'r') as f:
 error_case = {"both": 0, "table": 0, "passage": 0, "none": 0}
 
 top_k = 10
+qid_list = []
 
 for llm_error_case in llm_error_cases:
     positive_ctxs = llm_error_case['positive_ctxs']
@@ -96,12 +97,16 @@ for llm_error_case in llm_error_cases:
     
     if positive_tables.intersection(set(table_key_list)) and positive_passages.intersection(set(passage_key_list)):
         error_case['both'] += 1
+        qid_list.append(llm_error_case['id'])
     elif positive_tables.intersection(set(table_key_list)):
         error_case['table'] += 1
+        # qid_list.append(llm_error_case['id'])
     elif positive_passages.intersection(set(passage_key_list)):
         error_case['passage'] += 1
+        qid_list.append(llm_error_case['id'])
     else:
         error_case['none'] += 1
 
 print(error_case)
+json.dump(qid_list, open("qid_list.json", 'w'))
     

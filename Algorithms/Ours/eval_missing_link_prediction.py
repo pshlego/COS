@@ -22,52 +22,92 @@ class GraphQueryEngine:
 
         # load dataset
         ## two node graphs
-        # edge_contents = mongodb[cfg.edge_name]
-        # num_of_edges = edge_contents.count_documents({})
-        # self.edge_key_to_content = {}
-        # self.table_key_to_edge_keys = {}
-        # print(f"Loading {num_of_edges} graphs...")
-        # for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
-        #     self.edge_key_to_content[edge_content['chunk_id']] = edge_content
+        edge_contents = mongodb["table_chunks_to_passages_cos_table_passage"]
+        num_of_edges = edge_contents.count_documents({})
+        self.edge_key_to_content = {}
+        self.table_key_to_edge_keys = {}
+        print(f"Loading {num_of_edges} graphs...")
+        for id, edge_content in tqdm(enumerate(edge_contents.find()), total=num_of_edges):
+            self.edge_key_to_content[edge_content['table_chunk_id']] = edge_content
             
-        #     if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
-        #         self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
+            # if str(edge_content['table_id']) not in self.table_key_to_edge_keys:
+            #     self.table_key_to_edge_keys[str(edge_content['table_id'])] = []
 
-        #     self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
+            # self.table_key_to_edge_keys[str(edge_content['table_id'])].append(id)
 
+        print("4. Loading passages...")
+        self.passage_key_to_content = {}
+        passage_contents = json.load(open(cfg.passage_data_path))
+        print("4. Loaded " + str(len(passage_contents)) + " passages!")
+        print("4. Processing passages...")
+        for passage_content in tqdm(passage_contents):
+            self.passage_key_to_content[passage_content['title']] = passage_content
+        print("4. Processing passages complete!", end = "\n\n")
+        
         # load retrievers
         ## id mappings
         # self.id_to_edge_key = json.load(open(cfg.edge_ids_path))
         self.id_to_passage_key = json.load(open(cfg.passage_ids_path))
+        self.passage_key_to_id = json.load(open(cfg.passage_key_to_ids_path))
         
         ## colbert retrievers
         print(f"Loading index...")
-        # self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path)
-        self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path, checkpoint=cfg.passage_checkpoint_path)
+        self.colbert_edge_retriever = Searcher(index=f"{cfg.edge_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_edge_path, index_root=cfg.edge_index_root_path, checkpoint=cfg.edge_checkpoint_path)
+        # self.colbert_passage_retriever = Searcher(index=f"{cfg.passage_index_name}.nbits{cfg.nbits}", config=ColBERTConfig(), collection=cfg.collection_passage_path, index_root=cfg.passage_index_root_path, checkpoint=cfg.passage_checkpoint_path)
         
         # load experimental settings
-        self.top_k_of_passage = 2 #cfg.top_k_of_edge
-
+        self.top_k_of_passage = 5 #cfg.top_k_of_edge
+            
         self.node_scoring_method = cfg.node_scoring_method
-        self.batch_size = cfg.batch_size
-
-    def query(self, nl_question, table, row_id, retrieval_time = 2):
+        # self.batch_size = cfg.batch_size
+    def query(self, nl_question, table, row_id, topk, retrieval_time = 2):
+        chunk_id = f"{table['chunk_id']}"
+        entity_linking_result = self.edge_key_to_content[chunk_id]
+        linked_passage_list = []
+        for mention_info in entity_linking_result['results']:
+            row = mention_info['row']
+            if str(row_id) == str(row):
+                linked_passage_list.extend(mention_info['retrieved'][1:topk])
         
         # 1. Edge Retrieval
-        expanded_query = self.get_expanded_query(nl_question, table, row_id)
+        # expanded_query = self.get_expanded_query(nl_question, table, row_id)
 
-        retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, 5)
-        retrieved_id_list = retrieved_node_info[0]
-        retrieved_score_list = retrieved_node_info[2]
+        # retrieved_node_info = self.colbert_passage_retriever.search(expanded_query, self.top_k_of_passage)#, filter_fn=filter_fn, pid_deleted_list=pid_deleted_list)
+        # retrieved_id_list = retrieved_node_info[0]
+        # retrieved_score_list = retrieved_node_info[2]
         top_k = self.top_k_of_passage
 
         retrieved_passage_list = []
         
-        for target_rank, retrieved_id in enumerate(retrieved_id_list):
-            retrieved_node_id = self.id_to_passage_key[str(retrieved_id)]
-            retrieved_passage_list.append(retrieved_node_id)
-
-        return retrieved_passage_list[:top_k]
+        # for target_rank, retrieved_id in enumerate(retrieved_id_list):
+        #     retrieved_node_id = self.id_to_passage_key[str(retrieved_id)]
+        #     retrieved_passage_list.append(retrieved_node_id)
+    
+        retrieved_passage_list = retrieved_passage_list + linked_passage_list
+        retrieved_passage_list = list(set(retrieved_passage_list))
+        
+        table_title = table['title']
+        table_column_names = table['text'].split('\n')[0]
+        table_row_values = table['text'].split('\n')[row_id+1]
+        table_text = f"{table_title} [SEP] {table_column_names} [SEP] {table_row_values}"
+        
+        edge_text_list = []
+        for retrieved_passage_id in retrieved_passage_list:
+            passage_content = self.passage_key_to_content[retrieved_passage_id]
+            passage_text = f"{passage_content['title']} [SEP] {passage_content['text']}"
+            edge_text = f"{table_text} [SEP] {passage_text}"
+            edge_text_list.append(edge_text)
+        if edge_text_list == []:
+            return []
+        edges = self.colbert_edge_retriever.checkpoint.doc_tokenizer.tensorize(edge_text_list)
+        queries = self.colbert_edge_retriever.checkpoint.query_tokenizer.tensorize([nl_question])
+        encoded_Q = self.colbert_edge_retriever.checkpoint.query(*queries)
+        Q_duplicated = encoded_Q.repeat_interleave(len(edge_text_list), dim=0).contiguous()
+        encoded_D, encoded_D_mask = self.colbert_edge_retriever.checkpoint.doc(*edges, keep_dims='return_mask')
+        pred_scores = self.colbert_edge_retriever.checkpoint.score(Q_duplicated, encoded_D, encoded_D_mask)
+        retrieved_passage_list = [retrieved_passage_list[i] for i in torch.argsort(pred_scores, descending=True)][:top_k]
+        
+        return retrieved_passage_list
     
     def retrieve_edges(self, nl_question):
         
@@ -237,6 +277,9 @@ class GraphQueryEngine:
             
             graph[node_id]['score'] = node_score
 
+def filter_fn(pid, values_to_remove):
+    return pid[~torch.isin(pid, values_to_remove)].to("cuda")
+
 @hydra.main(config_path="conf", config_name="graph_query_algorithm")
 def main(cfg: DictConfig):
     # load qa dataset
@@ -253,38 +296,59 @@ def main(cfg: DictConfig):
     graph_query_engine = GraphQueryEngine(cfg)
     
     # query
+    
     print(f"Start querying...")
-    # Initialize recall arrays
-    answer_recall_list = []
-    for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
-        
-        nl_question = qa_datum['question']
-        answers = qa_datum['answers']
-        positive_passages = qa_datum['positive_passages']
-        retrieved_node_list = []
-        for positive_ctx in qa_datum['positive_ctxs']:
-            rows = positive_ctx['rows']
-            table_chunk_id = positive_ctx['chunk_id']
-            table = table_chunk_to_table[table_chunk_id]
-            for answer_node in positive_ctx['answer_node']:
-                row_id = rows.index(answer_node[1][0])
-                retrieved_nodes = graph_query_engine.query(nl_question, table, row_id, retrieval_time = 2)
-                retrieved_node_list.extend(retrieved_nodes)
-
-        if set(positive_passages).intersection(set(retrieved_node_list)) == set():
-            answer_recall_list.append(0)
-        else:
-            answer_recall_list.append(1)
+    for topk in [2, 3, 4, 5, 10]:
+        for top_k in [1,2,3,4,5,10]:
+            # for top_k_linked_passage in [5]:
+            # Initialize recall arrays
+            graph_query_engine.top_k_of_passage = top_k
+            answer_recall_list = []
+            linked_passage_len_list = []
+            missing_link_predict_len_list = []
+            for qidx, qa_datum in tqdm(enumerate(qa_dataset), total=len(qa_dataset)):
                 
-        # save integrated graph
-        # print(f"Saving integrated graph...")
-        # json.dump(retrieved_graphs, open(retrieved_graph_path, 'w'))
+                nl_question = qa_datum['question']
+                answers = qa_datum['answers']
+                positive_passages = qa_datum['positive_passages']
+                retrieved_node_list = []
+                for positive_ctx in qa_datum['positive_ctxs']:
+                    rows = positive_ctx['rows']
+                    table_chunk_id = positive_ctx['chunk_id']
+                    table = table_chunk_to_table[table_chunk_id]
+                    for answer_node in positive_ctx['answer_node']:
+                        row_id = rows.index(answer_node[1][0])
+                        # if "Whangarei" in nl_question:
+                        retrieved_nodes = graph_query_engine.query(nl_question, table, row_id, topk, retrieval_time = 2)
+                        # linked_passage_len_list.append(len(linked_passage_list))
+                        # missing_link_predict_len_list.append(len(set(retrieved_nodes)))
+                        retrieved_node_list.extend(retrieved_nodes)
+                        # else:
+                        #     continue
 
-    print(f"Start evaluating...")
-    print(f"Answer Recall: {sum(answer_recall_list) / len(answer_recall_list)}")
+                if set(positive_passages).intersection(set(retrieved_node_list)) == set():
+                    answer_recall_list.append(0)
+                else:
+                    answer_recall_list.append(1)
+                    
+            # save integrated graph
+            # print(f"Saving integrated graph...")
+            # json.dump(retrieved_graphs, open(retrieved_graph_path, 'w'))
+
+            print(f"Start evaluating...")
+            print(f"Entity Linking Top k: {topk}, Passage Augmentation Top K: {top_k}, Answer Recall: {sum(answer_recall_list) / len(answer_recall_list)}")
+    # print(f"Topk: {5}, Linked Passage Len: {sum(linked_passage_len_list) / len(linked_passage_len_list)}")
 
 if __name__ == "__main__":
     main()
 # 1. dev에서 table segment와 passage가 graph상에 연결되지 않은 경우를 확인
 # 2. 해당 경우에 대해 gold table segment와 질의를 합쳐 passage를 검색했을 때 검색되는 경우를 확인
 # 3. 검색되는 경우가 전체에서 얼마를 차지하는지 파악
+
+#1: 0.33852140077821014
+#2: 0.5525291828793775
+#3: 0.6653696498054474
+#4: 0.7159533073929961
+#5: 0.754863813229572
+#10: 0.8015564202334631
+#100: 

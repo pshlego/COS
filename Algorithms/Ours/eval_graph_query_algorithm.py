@@ -30,7 +30,7 @@ def read_jsonl(file_path):
     return data
 
 # def evaluate(retrieved_graph_list, qa_dataset, graph_query_engine):
-def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_content):
+def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_content, score_function = 'max'):
     
     # table_key_to_content = graph_query_engine.table_key_to_content
     # passage_key_to_content = graph_query_engine.passage_key_to_content
@@ -57,15 +57,25 @@ def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_cont
                                 or x[2] in filtered_retrieval_type and (x[2] == 'passage_node_augmentation_1' and (x[4] < 10) and (x[3] < 2)) 
                                 or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                             ]
+        else:
+            continue
+        
         if len(linked_nodes) == 0: continue
         
         revised_retrieved_graph[node_id] = copy.deepcopy(node_info)
         revised_retrieved_graph[node_id]['linked_nodes'] = linked_nodes
         
         linked_scores = [linked_node[1] for linked_node in linked_nodes]
-        node_score = max(linked_scores)
+
+        if score_function == 'max':
+            node_score = max(linked_scores)
+        elif score_function == 'avg':
+            node_score = sum(linked_scores) / len(linked_scores)
+        else:
+            node_score = min(linked_scores)
+
         revised_retrieved_graph[node_id]['score'] = node_score
-    retrieved_graph = revised_retrieved_graph
+    # retrieved_graph = revised_retrieved_graph
 
 
     # 2. Evaluate with revised retrieved graph
@@ -75,7 +85,7 @@ def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_cont
     context = ""
     retrieved_table_set = set()
     retrieved_passage_set = set()
-    sorted_retrieved_graph = sorted(retrieved_graph.items(), key = lambda x: x[1]['score'], reverse = True)
+    sorted_retrieved_graph = sorted(revised_retrieved_graph.items(), key = lambda x: x[1]['score'], reverse = True)
     
     for node_id, node_info in sorted_retrieved_graph:
         
@@ -159,10 +169,42 @@ def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_cont
     
     if is_has_answer:
         recall = 1
-        error_analysis = {}
+        error_analysis = copy.deepcopy(qa_data)
+        sorted_retrieved_graph = sorted(retrieved_graph.items(), key = lambda x: x[1]['score'], reverse = True)
+        for node_id, node_info in sorted_retrieved_graph:
+            if node_info['type'] == 'table segment':
+                table_id = node_id.split('_')[0]
+                table = table_key_to_content[table_id]
+                chunk_id = table['chunk_id']
+                node_info['chunk_id'] = chunk_id
+
+            elif node_info['type'] == 'table':
+                table_id = node_id.split('_')[0]
+                table = table_key_to_content[table_id]
+                chunk_id = table['chunk_id']
+                node_count += 1
+                
+        error_analysis['retrieved_graph'] = retrieved_graph
+        error_analysis['sorted_retrieved_graph'] = sorted_retrieved_graph[:node_count]
+        if  "hard_negative_ctxs" in error_analysis:
+            del error_analysis["hard_negative_ctxs"]
     else:
         recall = 0
         error_analysis = copy.deepcopy(qa_data)
+        sorted_retrieved_graph = sorted(retrieved_graph.items(), key = lambda x: x[1]['score'], reverse = True)
+        for node_id, node_info in sorted_retrieved_graph:
+            if node_info['type'] == 'table segment':
+                table_id = node_id.split('_')[0]
+                table = table_key_to_content[table_id]
+                chunk_id = table['chunk_id']
+                node_info['chunk_id'] = chunk_id
+
+            elif node_info['type'] == 'table':
+                table_id = node_id.split('_')[0]
+                table = table_key_to_content[table_id]
+                chunk_id = table['chunk_id']
+                node_count += 1
+
         error_analysis['retrieved_graph'] = retrieved_graph
         error_analysis['sorted_retrieved_graph'] = sorted_retrieved_graph[:node_count]
         if  "hard_negative_ctxs" in error_analysis:
@@ -182,7 +224,9 @@ def remove_accents_and_non_ascii(text):
 if __name__ == '__main__':
     # Test
     #query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/avg.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
-    query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
+    # min_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/min_max_avg/min.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/original_table_new_2.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
+    max_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_emb_missing_edge_pred_10_2_10_2_reranker_layer_28.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_embedding/original_table_new_2.jsonl"
+    # avg_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/min_max_avg/avg.jsonl"
     #query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256 copy.jsonl"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
@@ -208,21 +252,34 @@ if __name__ == '__main__':
     print("4. Processing passages complete!", end = "\n\n")
     
     # data = read_jsonl(query_results_path)
-    data = read_jsonl(query_results_path)
-    recall_list = []
+    # min_data = read_jsonl(min_results_path)
+    max_data = read_jsonl(max_results_path)
+    # avg_data = read_jsonl(avg_results_path)
+    
+    min_recall_list = []
+    max_recall_list = []
+    avg_recall_list = []
     error_case_list = [] 
-    for datum in data:
-        qa_data = datum["qa data"]
-        retrieved_graph = datum["retrieved graph"]
-        recall, error_case  = evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_content)
-        recall_list.append(recall)
-        
-        if recall == 0:
-            error_case_list.append(error_case)
+    for max_datum in max_data:
+        qa_data = max_datum["qa data"]
 
-    print("Recall: ", sum(recall_list)/len(recall_list))
-    with open("/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/llm_based_framework.json", "w") as file:
-        json.dump(error_case_list, file, indent = 4)
+        max_retrieved_graph = max_datum["retrieved graph"]
+        
+        max_recall, max_error_case  = evaluate(max_retrieved_graph, qa_data, table_key_to_content, passage_key_to_content, score_function = 'max')
+        
+        # print("Min: ", min_recall)
+        # print("Max: ", max_recall)
+        # print("Avg: ", avg_recall)
+        
+        max_recall_list.append(max_recall)
+        
+        if max_recall == 0:
+            error_case_list.append(max_error_case)
+
+    print("Max: ", sum(max_recall_list)/len(max_recall_list))
+    # print(len(recall_list))
+    # with open("/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/table_emb_missing_edge_pred_10_2_10_2_reranker_layer_28.json", "w") as file:
+    #     json.dump(error_case_list, file, indent = 4)
         
 # len(error_case_list)
 # 145
@@ -236,9 +293,4 @@ if __name__ == '__main__':
 # 0.9359190556492412
 # top-10 0.821247892074199
 # top-10 0.8482293423271501
-
-
-
-# max: 0.9421860885275519
-# avg: 0.9421860885275519
-# min: 0.9426377597109304
+# 76434

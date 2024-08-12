@@ -19,7 +19,11 @@ for table_key, table_content in tqdm(enumerate(table_contents)):
     table_key_to_content[str(table_key)] = table_content
 
 # Load query results
-query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
+data_graph_error_case = json.load(open("/home/shpark/OTT_QA_Workspace/data_graph_error_case.json"))
+current_error_case = json.load(open("/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/table_emb_missing_edge_pred_10_2_10_2_reranker_layer_28.json"))
+current_error_case_id_list = {x['id']: x for x in current_error_case}
+data_graph_error_case_id_list = {x['id']: x for x in data_graph_error_case}
+query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_emb_missing_edge_pred_10_2_10_2_reranker_layer_28.jsonl"
 data = read_jsonl(query_results_path)
 
 positive_score_dist_of_gold_tables = []
@@ -27,6 +31,10 @@ total_score_dist_of_gold_tables = []
 
 for datum in tqdm(data):
     qa_data = datum["qa data"]
+    if qa_data['id'] not in data_graph_error_case_id_list:
+        continue
+    if qa_data['id'] not in current_error_case_id_list:
+        continue
     retrieved_graph = datum["retrieved graph"]
     positive_ctxs = qa_data['positive_ctxs']
     positive_table_segments = set()

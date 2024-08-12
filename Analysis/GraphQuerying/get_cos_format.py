@@ -20,7 +20,7 @@ def read_jsonl(file_path):
             data.append(json.loads(line.strip()))
     return data
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/fixed_wo_step_2.jsonl"#"/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
+    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_embedding/original_table_new_2.jsonl"#"/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
     retrieved_graphs = read_jsonl(retrieved_graphs_path)
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
@@ -76,9 +76,9 @@ if __name__ == "__main__":
                 setting_key = f"{augment_type}_{query_topk}_{augment_topk}"
                 recall_list = []
                 revised_retrieved_graphs = []
-                filtered_retrieval_type = ['edge_retrieval', "passage_node_augmentation_0", "llm_selected"]
-                filtered_retrieval_type_1 = ['edge_retrieval', "llm_selected"]
-                filtered_retrieval_type_2 = ["passage_node_augmentation_0"]
+                filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1", "llm_selected"]
+                filtered_retrieval_type_1 = ['edge_reranking', "llm_selected"]
+                filtered_retrieval_type_2 = ["passage_node_augmentation_1"]
                 for retrieved_graph_info in retrieved_graphs:
                     retrieved_graph = retrieved_graph_info['retrieved graph']
                     revised_retrieved_graph = {}
@@ -95,6 +95,9 @@ if __name__ == "__main__":
                                                 or x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[4] < 10) and (x[3] < 2)) 
                                                 or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                                             ]
+                        else:
+                            continue
+                        
                         if len(linked_nodes) == 0: continue
                         
                         revised_retrieved_graph[node_id] = copy.deepcopy(node_info)
@@ -177,6 +180,7 @@ if __name__ == "__main__":
                                 retrieved_table_set.add(table_id)
                                 # if edge_count == 50:
                                 #     continue
+                                chunk_id = table['chunk_id']
                                 all_included.append({'id': chunk_id, 'title': table['title'], 'text': table['text']})
                                 edge_count += 1
 
@@ -200,6 +204,6 @@ if __name__ == "__main__":
                     cos_format_result['ctxs'] = all_included
                     cos_format_results.append(cos_format_result)
                 
-                with open(f"/mnt/sdd/shpark/experimental_results/output/cos_format_fixed_final_results_150_10_0_0_2_3_150_28_256_wo_second_round.json", 'w') as f:
+                with open(f"/mnt/sdd/shpark/experimental_results/original_table_new_2.json", 'w') as f:
                     json.dump(cos_format_results, f, indent=4)
         

@@ -12,15 +12,16 @@ passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 entity_linking_dataset_path: /mnt/sdd/shpark/table_chunks_to_passages_cos_table_passage.jsonl
 
 # output
-final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/Table_Schema.jsonl
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/Table_Schema_time.json
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/Table_Schema_error.json
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_20_5.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_20_5_time.json
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_20_5_error.json
 
 # retriever
 ## id to chunk id
 edge_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json
 table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/index_to_chunk_id.json
 passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
+passage_key_to_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/chunk_id_to_index.json
 
 ## colbert config
 collection_edge_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv
@@ -45,10 +46,10 @@ nbits: 2
 
 # experimental setting
 top_k_of_edge: 150
-top_k_of_table_segment_augmentation: 10
+top_k_of_table_segment_augmentation: 20
 top_k_of_passage_augmentation: 0
 top_k_of_table_segment: 0
-top_k_of_passage: 2
+top_k_of_passage: 5
 top_k_of_table_select_w_llm: 3
 node_scoring_method: max
 edge_reranker_batch_size: 150

@@ -2,7 +2,7 @@ import json
 from tqdm import tqdm
 
 if __name__ == "__main__":
-    query_path = "/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_full_layer_wo_table_retrieval.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_first.json"#"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json"#f"/mnt/sdd/shpark/experimental_results/error_case_two_node_graph/error_cases_none_1_1_v2.json"#"/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
+    query_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/original_table_new_2.json" #"/mnt/sdd/shpark/experimental_results/error_cases/baai_rerank_first.json"#"/mnt/sdd/shpark/experimental_results/error_cases/baai_reranker.json"#f"/mnt/sdd/shpark/experimental_results/error_case_two_node_graph/error_cases_none_1_1_v2.json"#"/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json"
     generated_data_graph_path = "/mnt/sdf/OTT-QAMountSpace/AnalysisResults/COS/DataGraphConstructor/table_chunks_to_passages_cos_table_passage.json"
 
     with open(generated_data_graph_path, 'r') as f:
@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     error_cases = []
     
-    for qid, query_info in tqdm(queries.items()):
+    for query_info in tqdm(queries):
         table_chunk_id_to_linked_passages = {}
         for positive_ctx in query_info['positive_ctxs']:
             table_chunk_id = positive_ctx['chunk_id']
@@ -53,7 +53,7 @@ if __name__ == "__main__":
             linked_passages_in_generated_graph = []
             
             for link in generated_data_graph['results']:
-                linked_passages_in_generated_graph.extend(link['retrieved'])
+                linked_passages_in_generated_graph.extend(link['retrieved'][:1])
             
             if table_chunk_id in table_chunk_id_to_retrieved_passages:
                 linked_passages_in_generated_graph.extend(table_chunk_id_to_retrieved_passages[table_chunk_id])
@@ -64,5 +64,5 @@ if __name__ == "__main__":
                     del query_info['hard_negative_ctxs']
                 error_cases.append(query_info)
     
-    with open("/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/data_graph_error_cases_baai_rerank_full_layer_wo_table_retrieval_w_top5.json", 'w') as f:
+    with open("/home/shpark/OTT_QA_Workspace/Analysis/GraphQueryResults/original_table_new_2.json", 'w') as f:
         json.dump(error_cases, f, indent=4)

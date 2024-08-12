@@ -20,7 +20,7 @@ def remove_accents_and_non_ascii(text):
     cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?\-]', '', ascii_text)
     return cleaned_text
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/wo_step_2.jsonl" #"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
+    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/min_max_avg/avg.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_embedding/original_table_new_2.jsonl"#/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/wo_step_2.jsonl" #"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
     retrieved_graphs = read_jsonl(retrieved_graphs_path)
     # retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/baai_rerank_full_layer_wo_table_retrieval.json"
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
@@ -85,10 +85,10 @@ if __name__ == "__main__":
                     all_included = []
                     retrieved_table_set = set()
                     retrieved_passage_set = set()
-                    filtered_retrieval_type = ['edge_retrieval', 'passage_node_augmentation_0', 'llm_selected']#['edge_reranking', "passage_node_augmentation_1"]
+                    filtered_retrieval_type = ['edge_reranking', 'passage_node_augmentation_1', 'llm_selected']#['edge_reranking', "passage_node_augmentation_1"]
                     # filtered_retrieval_type = ['edge_retrieval', "passage_node_augmentation_1"]
-                    filtered_retrieval_type_1 = ['edge_retrieval', 'llm_selected']#['edge_reranking']
-                    filtered_retrieval_type_2 = ['passage_node_augmentation_0']#["passage_node_augmentation_1"]
+                    filtered_retrieval_type_1 = ['edge_reranking', 'llm_selected']#['edge_reranking']
+                    filtered_retrieval_type_2 = ['passage_node_augmentation_1']#["passage_node_augmentation_1"]
                     # 1. Revise retrieved graph
                     revised_retrieved_graph = {}
                     for node_id, node_info in retrieved_graph.items():                  
@@ -105,13 +105,15 @@ if __name__ == "__main__":
                                                 or x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[4] < 10) and (x[3] < 2)) 
                                                 or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                                             ]
+                        else:
+                            continue
                         if len(linked_nodes) == 0: continue
                         
                         revised_retrieved_graph[node_id] = copy.deepcopy(node_info)
                         revised_retrieved_graph[node_id]['linked_nodes'] = linked_nodes
                         
                         linked_scores = [linked_node[1] for linked_node in linked_nodes]
-                        node_score = max(linked_scores)
+                        node_score = sum(linked_scores) / len(linked_scores)
                         revised_retrieved_graph[node_id]['score'] = node_score
                         
                     retrieved_graph = revised_retrieved_graph
