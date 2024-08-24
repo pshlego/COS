@@ -20,7 +20,7 @@ def read_jsonl(file_path):
             data.append(json.loads(line.strip()))
     return data
 if __name__ == "__main__":
-    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_embedding/original_table_new_2.jsonl"#"/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
+    retrieved_graphs_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_5_5_full.jsonl"#"/mnt/sdd/shpark/output/add_reranking_passage_augmentation_150_10_2_trained_v2.json"
     retrieved_graphs = read_jsonl(retrieved_graphs_path)
     table_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path= "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
@@ -76,23 +76,23 @@ if __name__ == "__main__":
                 setting_key = f"{augment_type}_{query_topk}_{augment_topk}"
                 recall_list = []
                 revised_retrieved_graphs = []
-                filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1", "llm_selected"]
-                filtered_retrieval_type_1 = ['edge_reranking', "llm_selected"]
-                filtered_retrieval_type_2 = ["passage_node_augmentation_1"]
+                filtered_retrieval_type = ['edge_reranking', "node_augmentation_1", "passage_node_augmentation_1", "entity_linking_1", 'llm_selected']
+                filtered_retrieval_type_1 = ['edge_reranking', 'llm_selected']#, 'llm_selected'
+                filtered_retrieval_type_2 = ["node_augmentation_1", "passage_node_augmentation_1", "entity_linking_1"]
                 for retrieved_graph_info in retrieved_graphs:
                     retrieved_graph = retrieved_graph_info['retrieved graph']
                     revised_retrieved_graph = {}
                     for node_id, node_info in retrieved_graph.items():
                         if node_info['type'] == 'table segment':
                             linked_nodes = [x for x in node_info['linked_nodes'] 
-                                                if x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[3] < 10) and (x[4] < 2)) 
+                                                if x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[3] < 10) and (x[4] < 10000)) 
                                                     or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 1) and (x[3] < 1)) 
                                                     or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                                             ]
                         elif node_info['type'] == 'passage':
                             linked_nodes = [x for x in node_info['linked_nodes'] 
                                                 if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 1) and (x[4] < 1)) 
-                                                or x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[4] < 10) and (x[3] < 2)) 
+                                                or x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[4] < 10) and (x[3] < 10000)) 
                                                 or x[2] in filtered_retrieval_type_1#['edge_reranking', "llm_selected"]
                                             ]
                         else:
@@ -175,12 +175,12 @@ if __name__ == "__main__":
                             max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_retrieval', 0, 0))
                             table_id = max_linked_node_id.split('_')[0]
                             table = table_key_to_content[table_id]
+                            chunk_id = table['chunk_id']
                             
                             if table_id not in retrieved_table_set:
                                 retrieved_table_set.add(table_id)
                                 # if edge_count == 50:
                                 #     continue
-                                chunk_id = table['chunk_id']
                                 all_included.append({'id': chunk_id, 'title': table['title'], 'text': table['text']})
                                 edge_count += 1
 
@@ -204,6 +204,6 @@ if __name__ == "__main__":
                     cos_format_result['ctxs'] = all_included
                     cos_format_results.append(cos_format_result)
                 
-                with open(f"/mnt/sdd/shpark/experimental_results/original_table_new_2.json", 'w') as f:
+                with open(f"/mnt/sdd/shpark/experimental_results/expanded_query_retrieval_5_5_full.json", 'w') as f:
                     json.dump(cos_format_results, f, indent=4)
         

@@ -12,9 +12,9 @@ passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 entity_linking_dataset_path: /mnt/sdd/shpark/table_chunks_to_passages_cos_table_passage.jsonl
 
 # output
-final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/entity_linking_part2.jsonl
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/entity_linking_part2_time.jsonl
-error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/entity_linking_part2_error.json
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/both_part1.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/both_part1_time.jsonl
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/both_part1_error.json
 
 # retriever
 ## id to chunk id
@@ -55,4 +55,4 @@ top_k_of_table_select_w_llm: 3
 top_k_of_entity_linking: 2
 node_scoring_method: max
 edge_reranker_batch_size: 200
-missing_edge_prediction_type: entity_linking #entity_linking, expanded_query_retrieval, both
+missing_edge_prediction_type: both #entity_linking, expanded_query_retrieval, both

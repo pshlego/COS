@@ -1,0 +1,3 @@
+CUDA_VISIBLE_DEVICES=0,1,2,3 python /home/shpark/OTT_QA_Workspace/Algorithms/Ours/llm_reader_oracle_setting.py result_path=/mnt/sdf/OTT-QAMountSpace/ExperimentResults/reading_output/end_to_end_oracle.jsonl prompt_temp_type=end_to_end topk=10
+CUDA_VISIBLE_DEVICES=0,1,2,3 python /home/shpark/OTT_QA_Workspace/Algorithms/Ours/llm_reader_oracle_setting.py result_path=/mnt/sdf/OTT-QAMountSpace/ExperimentResults/reading_output/chain_of_thought_oracle.jsonl prompt_temp_type=chain_of_thought topk=10
+CUDA_VISIBLE_DEVICES=0,1,2,3 python /home/shpark/OTT_QA_Workspace/Algorithms/Ours/llm_reader_oracle_setting.py result_path=/mnt/sdf/OTT-QAMountSpace/ExperimentResults/reading_output/few_shot_oracle.jsonl prompt_temp_type=few_shot topk=10

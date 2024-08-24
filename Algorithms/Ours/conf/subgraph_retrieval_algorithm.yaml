@@ -1,0 +1,71 @@
+# input
+qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
+edge_dataset_path: /mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_edge_1_w_original_table.jsonl
+table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
+passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
+entity_linking_dataset_path: /mnt/sdd/shpark/table_chunks_to_passages_cos_table_passage.jsonl
+
+# output
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/entity_linking_5.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/entity_linking_5_time.jsonl
+error_cases_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/column_selection_v2_error.json
+
+# retriever
+## id to chunk id
+edge_and_table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge_w_table/index_to_chunk_id_edge_topk_1.json
+table_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/index_to_chunk_id.json
+passage_ids_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json
+
+## collection
+collection_edge_and_table_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge_w_table/edge_topk_1.tsv
+collection_table_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/table_cos_version/collection.tsv
+collection_passage_path: /mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv
+
+## index
+index_root_path: /mnt/sdc/shpark/OTT-QAMountSpace/Embeddings
+
+edge_and_table_index_name: top1_edge_embeddings_v2_trained_w_original_table.nbits2
+table_index_name: passage_to_table_segment_embeddings_trained_w_sample_rate_0_3_cos_version_query_len_96.nbits2
+passage_index_name: table_segment_to_passage_embeddings_trained_w_sample_rate_0_5_cos_version_query_len_96.nbits2
+
+## checkpoint
+edge_and_table_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_trained_v2
+table_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/passage_to_table_segment_sample_rate_0_3_query_len_96
+passage_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/table_segment_to_passage_sample_rate_0_5_query_len_96
+reranker_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400
+llm_checkpoint_path: /mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ
+
+# experimental setting
+## retrieve edges & tables
+top_k_of_edges_and_tables: 150
+
+## rerank edges & tables
+cutoff_layer: 28
+reranking_max_length: 256
+process_num: 4
+
+## predict missing edges
+node_scoring_method: max #max, min, avg
+missing_edge_prediction_type: entity_linking #entity_linking, expanded_query_retrieval, both
+top_k_of_missing_edges: [1000, 1000]
+### expanded query retrieval
+top_k_of_table_segment_query: [10, 10]
+top_k_of_table_segment_query_entity_linking: [10, 10]
+top_k_of_passage_query: [0, 0]
+top_k_of_table_segment_target: [0, 0]
+top_k_of_passage_target: [5, 5]
+### entity linking
+top_k_of_entity_linking: [5, 5]
+
+## find relevant nodes with llm
+max_edge_score: 1000000
+min_edge_score: -1000000
+top_k_of_table_segment_select_w_llm: 3
+top_k_of_passage_select_w_llm: 3
+top_k_of_table_select_w_llm: 3
+table_and_linked_passages_trim_length: 96
+passage_trim_length: 96
+mex_model_length: 6400
+tensor_parallel_size: 4
+gpu_memory_utilization: 0.5
+

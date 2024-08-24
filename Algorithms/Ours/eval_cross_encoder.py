@@ -34,12 +34,12 @@ from FlagEmbedding import LayerWiseFlagLLMReranker, FlagReranker
 # model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 # model = CrossEncoder(model_name, num_labels=1, max_length=512)
 model_name = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400"
-# model_1 = LayerWiseFlagLLMReranker(model_name, use_fp16=True, device='cuda:1')
 # model_0 = LayerWiseFlagLLMReranker(model_name, use_fp16=True, device='cuda:0')
-model_2 = LayerWiseFlagLLMReranker(model_name, use_fp16=True, device='cuda:2')
+# model_1 = LayerWiseFlagLLMReranker(model_name, use_fp16=True, device='cuda:1')
+# model_2 = LayerWiseFlagLLMReranker(model_name, use_fp16=True, device='cuda:2')
 model_3 = LayerWiseFlagLLMReranker(model_name, use_fp16=True, device='cuda:3')
 
-model_list = [model_2, model_3]
+model_list = [model_3]
 # model_name = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/slm_reranker_baai/checkpoint-6000"
 # model = FlagReranker(model_name, use_fp16=True)
 dev_corpus = {}
@@ -97,3 +97,4 @@ print("Mean MRR:", mean_mrr)
 #28, 512 Mean MRR: 0.9472019359972988, 5.2s
 #40, 128 Mean MRR: 0.899207245379332, 3s
 #40, 256 Mean MRR: 0.9388747293557591, 4.5s
+# Whangarei

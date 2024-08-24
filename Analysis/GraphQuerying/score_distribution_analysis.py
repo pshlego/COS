@@ -20,21 +20,24 @@ for table_key, table_content in tqdm(enumerate(table_contents)):
 
 # Load query results
 data_graph_error_case = json.load(open("/home/shpark/OTT_QA_Workspace/data_graph_error_case.json"))
-current_error_case = json.load(open("/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/table_emb_missing_edge_pred_10_2_10_2_reranker_layer_28.json"))
-current_error_case_id_list = {x['id']: x for x in current_error_case}
-data_graph_error_case_id_list = {x['id']: x for x in data_graph_error_case}
-query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_emb_missing_edge_pred_10_2_10_2_reranker_layer_28.jsonl"
+current_error_case = json.load(open("/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/missing_link_3_3.json"))
+# corrected_qid_list = json.load(open("/home/shpark/OTT_QA_Workspace/2_5.json"))
+current_error_case_id_list = [x['id'] for x in current_error_case]
+data_graph_error_case_id_list = [x['id'] for x in data_graph_error_case]
+query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/missing_link_3_3.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_v2.jsonl"
 data = read_jsonl(query_results_path)
 
 positive_score_dist_of_gold_tables = []
 total_score_dist_of_gold_tables = []
-
+qid_list = []
 for datum in tqdm(data):
     qa_data = datum["qa data"]
     if qa_data['id'] not in data_graph_error_case_id_list:
         continue
     if qa_data['id'] not in current_error_case_id_list:
         continue
+    # if qa_data['id'] not in corrected_qid_list:
+    #     continue
     retrieved_graph = datum["retrieved graph"]
     positive_ctxs = qa_data['positive_ctxs']
     positive_table_segments = set()
@@ -54,7 +57,7 @@ for datum in tqdm(data):
 
     revised_retrieved_graph = {}
     for node_id, node_info in retrieved_graph.items():
-        linked_nodes = [x for x in node_info['linked_nodes'] if x[2] == 'edge_retrieval']  # Filtering condition here
+        linked_nodes = [x for x in node_info['linked_nodes'] if x[2] in ['edge_and_table_retrieval','table_to_table_segment']]  # Filtering condition here
         if len(linked_nodes) == 0: continue
         revised_retrieved_graph[node_id] = copy.deepcopy(node_info)
         linked_scores = [linked_node[1] for linked_node in linked_nodes]
@@ -79,23 +82,27 @@ for datum in tqdm(data):
             row_id = node_id.split('_')[1]
             chunk_id = table_key_to_content[table_id]['chunk_id']
             if f"{chunk_id}_{row_id}" in positive_table_segments:
+                if rank < 5:
+                    qid_list.append(qa_data['id'])
+                # if rank > 50:
+                #     continue
                 positive_score_dist_of_gold_tables.append(rank)
                 break
             rank += 1
             total_score_dist_of_gold_tables.append(node_info['score'])
-
+json.dump(qid_list, open("/home/shpark/OTT_QA_Workspace/qid_list.json", 'w'), indent=2)
 # Plot the score distributions
-plt.figure(figsize=(10, 6))
-# plt.hist(total_score_dist_of_gold_tables, bins=120, label='Total Score Distribution', alpha=0.5, color='red')
-plt.hist(positive_score_dist_of_gold_tables, bins=120, label='Positive Score Distribution', color='blue')
-plt.xlabel('Scaled Score')
-plt.ylabel('Frequency')
-plt.title('Scaled Score Distribution of Positive Table Segments vs Total Score Distribution')
-plt.legend()
+# plt.figure(figsize=(10, 6))
+# # plt.hist(total_score_dist_of_gold_tables, bins=120, label='Total Score Distribution', alpha=0.5, color='red')
+# plt.hist(positive_score_dist_of_gold_tables, bins=120, label='Positive Score Distribution', color='blue')
+# plt.xlabel('Scaled Score')
+# plt.ylabel('Frequency')
+# plt.title('Scaled Score Distribution of Positive Table Segments vs Total Score Distribution')
+# plt.legend()
 
-# Save the plot as a PNG file
-output_file = "/home/shpark/OTT_QA_Workspace/scaled_rank_distribution_of_gold_tables.png"
-plt.savefig(output_file)
-plt.close()
+# # Save the plot as a PNG file
+# output_file = "/home/shpark/OTT_QA_Workspace/scaled_rank_distribution_of_gold_tables.png"
+# plt.savefig(output_file)
+# plt.close()
 
-print(f"Plot saved as {output_file}")
+# print(f"Plot saved as {output_file}")
