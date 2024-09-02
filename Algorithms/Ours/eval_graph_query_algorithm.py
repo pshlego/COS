@@ -38,9 +38,9 @@ def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_cont
     # passage_key_to_content = graph_query_engine.passage_key_to_content
     # filtered_retrieval_type = ['edge_reranking', "passage_node_augmentation_1"]
     # filtered_retrieval_type_1 = ['edge_reranking']
-    filtered_retrieval_type = ['edge_reranking', "node_augmentation_1", "passage_node_augmentation_1", "entity_linking_1", 'llm_selected']
-    filtered_retrieval_type_1 = ['edge_reranking', 'llm_selected']#, 'llm_selected'
-    filtered_retrieval_type_2 = ["node_augmentation_1", "passage_node_augmentation_1", "entity_linking_1"]
+    filtered_retrieval_type = ['edge_and_table_retrieval', 'edge_reranking', "node_augmentation_0", "passage_node_augmentation_1", "entity_linking_1", 'llm_selected']
+    filtered_retrieval_type_1 = ['edge_and_table_retrieval', 'edge_reranking', 'llm_selected']#, 'llm_selected'
+    filtered_retrieval_type_2 = ["node_augmentation_0", "passage_node_augmentation_1", "entity_linking_1"]
     # filtered_retrieval_type = ['edge_retrieval', "passage_node_augmentation_0", "llm_selected"]
     # filtered_retrieval_type = ['edge_retrieval', "passage_node_augmentation_1"]
     # filtered_retrieval_type_1 = ['edge_retrieval', "llm_selected"]
@@ -230,7 +230,7 @@ if __name__ == '__main__':
     # Test
     #query_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/avg.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
     max_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/missing_link_4_3.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/original_table_new_2.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/final_results_150_10_0_0_2_3_150_28_256.jsonl"
-    min_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_5_5_full.jsonl" #heuristic_10_10.jsonl"
+    min_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/graph_candidate_retrieval_256.jsonl" #"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/graph_candidate_retrieval_512.jsonl" #heuristic_10_10.jsonl"
     #data_graph_error_cases_path = "/home/shpark/OTT_QA_Workspace/data_graph_error_case.json"
     #max_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_10_query_2_target_diff_passage_text.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/table_embedding/original_table_new_2.jsonl"
     # avg_results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/min_max_avg/avg.jsonl"
@@ -300,17 +300,17 @@ if __name__ == '__main__':
         #     positive_id_list.append(qa_data['id'])
         # elif max_recall == 1 and min_recall == 0:
         #     negative_id_list.append(qa_data['id'])
-        #if min_recall == 0:
+        # if min_recall == 0:
         error_case_list.append(min_error_case)
 
     # print("Max: ", sum(max_recall_list)/len(max_recall_list))
     print("Min: ", sum(min_recall_list)/len(min_recall_list))
     print('len: ', len(max_recall_list))
     print()
-    # print(len(recall_list))
+    # # print(len(recall_list))
     # with open("/mnt/sdf/OTT-QAMountSpace/AnalysisResults/Ours/GraphQuerier/error_cases/expanded_query_retrieval_5_5_full_data_graph_error_total.json", "w") as file:
     #     json.dump(error_case_list, file, indent = 4)
-    # with open("/home/shpark/OTT_QA_Workspace/positive_id_list.json", "w") as file:
+    # # with open("/home/shpark/OTT_QA_Workspace/positive_id_list.json", "w") as file:
     #     json.dump(positive_id_list, file, indent = 4)
     # with open("/home/shpark/OTT_QA_Workspace/negative_id_list.json", "w") as file:
     #     json.dump(negative_id_list, file, indent = 4)

@@ -1,0 +1,34 @@
+# input
+qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
+table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
+passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
+
+# output
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/200_100_original_llm.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/time/200_100_original_llm.jsonl
+
+# experimental setting
+## retrieve edges & tables
+top_k_of_retrieved_edges: 200
+
+## rerank edges & tables
+top_k_of_reranked_edges: 100
+reranking_node_max_length: 128
+reranking_edge_max_length: 256
+
+## predict missing edges
+node_scoring_method: direct #direct, max, min, avg
+### expanded query retrieval
+top_k_of_query: 10
+top_k_of_target: 5
+
+## find bipartite subgraph with llm
+top_k_of_table_segment_select_w_llm: 3
+top_k_of_passage_select_w_llm: 3
+top_k_of_table_select_w_llm: 3
+table_and_linked_passages_trim_length: 96
+passage_trim_length: 96
+
+# etc
+max_edge_score: 1000000
+min_edge_score: -1000000

@@ -149,7 +149,7 @@ The answer is: Lalith William Samarasekera Athulathmudali.
 <|start_header_id|>user<|end_header_id|>
 Here is the table and passages to answer this question. Answer the question with a short span. The answer needs to be just in a few words.
 /*
-Title : List of Rangers F.C. records and statistics
+table caption : List of Rangers F.C. records and statistics
 col : # | Player | To | Fee | Date
 row 1 : 1 | Alan Hutton | Tottenham Hotspur | 9,000,000 | 30 January 2008
 row 2 : 2 | Giovanni van Bronckhorst | Arsenal | 8,500,000 | 20 June 2001
