@@ -18,7 +18,7 @@ from ColBERT.colbert.infra import ColBERTConfig
 from FlagEmbedding import LayerWiseFlagLLMReranker
 # from Ours.dpr.data.qa_validation import has_answer
 # from Ours.dpr.utils.tokenizers import SimpleTokenizer
-from prompts import select_table_segment_prompt, select_passage_prompt
+from prompt.prompts import select_table_segment_prompt, select_passage_prompt
 
 set_seed(0)
 
