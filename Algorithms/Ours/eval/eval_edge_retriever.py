@@ -8,7 +8,7 @@ from pymongo import MongoClient
 from omegaconf import DictConfig
 from ColBERT.colbert import Searcher
 from ColBERT.colbert.infra import ColBERTConfig
-from Ours.table_retriever import TableRetriever
+from cos_based.table_retriever import TableRetriever
 from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
 from transformers import AutoTokenizer, AutoModelForSequenceClassification

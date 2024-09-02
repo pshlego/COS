@@ -3,7 +3,7 @@ import math
 from omegaconf import DictConfig
 from tqdm import tqdm
 import json
-from subgraph_embedder import preprocess_graph
+from cos_based.subgraph_embedder import preprocess_graph
 from pymongo import MongoClient
 from dpr.models.hf_models_cos import get_any_tensorizer
 from dpr.data.biencoder_data import (

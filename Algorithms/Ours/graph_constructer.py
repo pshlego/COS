@@ -4,10 +4,10 @@ import json
 import torch
 from tqdm import tqdm
 from omegaconf import DictConfig
-from mention_detector import MentionDetector
-from entity_linker import COSEntityLinker, MVDEntityLinker
-from view_generator import ViewGenerator
-from index_builder import IndexBuilder
+from cos_based.mention_detector import MentionDetector
+from cos_based.entity_linker import COSEntityLinker, MVDEntityLinker
+from mvd_based.view_generator import ViewGenerator
+from mvd_based.index_builder import IndexBuilder
 from transformers import BertTokenizer
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from utils.utils import process_mention, MentionInfo, prepare_datasource
