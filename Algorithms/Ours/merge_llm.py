@@ -1,2 +1,0 @@
-from FlagEmbedding.llm_reranker.merge import merge_layerwise_finetuned_llm
-merge_layerwise_finetuned_llm('BAAI/bge-reranker-v2-minicpm-layerwise', '/mnt/sdd/shpark/reranker/reranker-baai-15-negatives-96/checkpoint-400', '/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400')

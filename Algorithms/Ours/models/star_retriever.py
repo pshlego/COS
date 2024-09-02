@@ -12,9 +12,9 @@ app = Flask(__name__)
 cors = CORS(app)
 
 # Initialize Index
-index_name = "top1_edge_embeddings_v2_trained_1_epoch_bsize_512.nbits2"
-ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json"
-collection_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv"
+index_name = "top1_star_embeddings_v2_trained_1_epoch_bsize_512.nbits2"
+ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/star/index_to_chunk_id_star_topk_1.json"
+collection_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/star/star_topk_1.tsv"
 index_root_path = "/mnt/sdc/shpark/OTT-QAMountSpace/Embeddings"
 checkpoint_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_trained_v2"
 retriever = ColBERTRetriever(index_name, ids_path, collection_path, index_root_path, checkpoint_path)

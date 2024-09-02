@@ -16,7 +16,7 @@ cors = CORS(app)
 # Initialize Large Language Model
 llm_checkpoint_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/llm/TechxGenus/Meta-Llama-3-70B-Instruct-AWQ"
 tensor_parallel_size = 4
-gpu_memory_utilization = 0.6
+gpu_memory_utilization = 0.5
 max_model_length = 6400
 
 llm  = vllm.LLM(
