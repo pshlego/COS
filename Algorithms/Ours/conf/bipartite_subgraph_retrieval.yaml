@@ -4,15 +4,15 @@ table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original
 passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 
 # output
-final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/200_100_original_llm.jsonl
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/time/200_100_original_llm.jsonl
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/300_150_llm_70B_128.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/time/300_150_llm_70B_128.jsonl
 
 # experimental setting
 ## retrieve edges & tables
-top_k_of_retrieved_edges: 200
+top_k_of_retrieved_edges: 300
 
 ## rerank edges & tables
-top_k_of_reranked_edges: 100
+top_k_of_reranked_edges: 150
 reranking_node_max_length: 128
 reranking_edge_max_length: 256
 

@@ -1,0 +1,631 @@
+Timer unit: 1e-06 s
+
+Total time: 115.12 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: query at line 82
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    82                                               @profile
+    83                                               def query(self, question):
+    84                                                   # 1. Search bipartite subgraph candidates
+    85         9   40664490.0    5e+06     35.3          bipartite_subgraph_candidates = self.search_bipartite_subgraph_candidates(question)
+    86                                                   
+    87                                                   # 2. Find bipartite subgraph
+    88         8   74455552.6    9e+06     64.7          self.find_bipartite_subgraph(question, bipartite_subgraph_candidates)
+    89                                                   
+    90                                                   # self.find_relevant_nodes(question, bipartite_subgraph_candidates)
+    91                                                   
+    92         8          4.5      0.6      0.0          return bipartite_subgraph_candidates
+    93                                                   # return bipartite_subgraph
+
+Total time: 40.66 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: search_bipartite_subgraph_candidates at line 95
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    95                                               @profile
+    96                                               def search_bipartite_subgraph_candidates(self, question):
+    97                                                   # 1.1 Retrieve edges
+    98         9    9082080.5    1e+06     22.3          retrieved_edges = self.retrieve_edges(question)
+    99                                           
+   100                                                   # 1.2 Rerank edges
+   101         9   12069537.7    1e+06     29.7          reranked_edges = self.rerank_edges(question, retrieved_edges)
+   102                                           
+   103                                                   # 1.3 Integrate edges into bipartite subgraph candidates
+   104         8      20797.6   2599.7      0.1          bipartite_subgraph_candidates = self.integrate_into_graph(reranked_edges)
+   105                                                   
+   106                                                   # 1.4 Assign scores to nodes
+   107         8    4621688.7 577711.1     11.4          self.assign_scores_to_nodes(question, bipartite_subgraph_candidates)
+   108                                                   
+   109                                                   # 1.5 Augment nodes to bipartite subgraph candidates
+   110         8   14865918.2    2e+06     36.6          self.augment_nodes(question, bipartite_subgraph_candidates)
+   111                                                   
+   112         8          6.0      0.7      0.0          return bipartite_subgraph_candidates
+
+Total time: 9.04202 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: retrieve_edges at line 113
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   113                                               @profile
+   114                                               def retrieve_edges(self, question):
+   115        18    8944962.8 496942.4     98.9          response = requests.post(
+   116         9         19.3      2.1      0.0              self.edge_retriever_addr,
+   117         9         13.9      1.5      0.0              json={
+   118         9         10.4      1.2      0.0                  "query": question,
+   119         9         13.9      1.5      0.0                  "k": 10000
+   120                                                       },
+   121         9          4.9      0.5      0.0              timeout=None,
+   122                                                   ).json()
+   123                                                   
+   124         9         19.3      2.1      0.0          edge_content_list = response['edge_content_list']
+   125         9          8.3      0.9      0.0          edge_score_list = response['retrieved_score_list']
+   126                                                   
+   127         9          9.1      1.0      0.0          retrieved_edges = []
+   128      2781       1184.0      0.4      0.0          for edge_content, edge_score in zip(edge_content_list, edge_score_list):
+   129                                                       # pass single node graph
+   130      2781        999.7      0.4      0.0              if 'linked_entity_id' not in edge_content:
+   131        81         20.2      0.2      0.0                  continue
+   132                                                       
+   133      2700        972.9      0.4      0.0              edge_content['retrieval_score'] = edge_score
+   134      2700       1174.1      0.4      0.0              retrieved_edges.append(edge_content)
+   135                                                       
+   136      2700      92596.0     34.3      1.0              if len(retrieved_edges) == self.cfg.top_k_of_retrieved_edges:
+   137         9         11.8      1.3      0.0                  break
+   138                                                   
+   139         9          2.8      0.3      0.0          return retrieved_edges
+
+Total time: 12.0536 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: rerank_edges at line 140
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   140                                               @profile
+   141                                               def rerank_edges(self, question, retrieved_edges):
+   142         9         11.2      1.2      0.0          model_input = []
+   143      2709        787.5      0.3      0.0          for element in retrieved_edges:
+   144      2700       1795.0      0.7      0.0              table_key = element['chunk_id'].split('_')[0]
+   145      2700       2077.1      0.8      0.0              row_id = int(element['chunk_id'].split('_')[1])
+   146      2700       4281.6      1.6      0.0              table_content = self.table_key_to_content[table_key]
+   147      2700       2411.4      0.9      0.0              table_title = table_content['title']
+   148      2700       5253.1      1.9      0.0              table_rows = table_content['text'].split('\n')
+   149      2700        864.1      0.3      0.0              column_names = table_rows[0]
+   150      2700        927.5      0.3      0.0              row_values = table_rows[row_id+1]
+   151      2700       1981.2      0.7      0.0              table_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
+   152      2700        950.8      0.4      0.0              passage_key = element['linked_entity_id']
+   153      2700       6778.3      2.5      0.1              passage_text = self.passage_key_to_content[passage_key]['text']
+   154      2700       3268.2      1.2      0.0              edge_text = table_text + ' [SEP] ' + passage_text
+   155      2700       1144.2      0.4      0.0              model_input.append([question, edge_text])
+   156                                                   
+   157        18   12002023.3 666779.1     99.6          response = requests.post(
+   158         9         16.4      1.8      0.0              self.reranker_addr,
+   159         9         12.8      1.4      0.0              json={
+   160         9          5.4      0.6      0.0                  "model_input": model_input,
+   161         9        726.1     80.7      0.0                  "max_length": self.cfg.reranking_edge_max_length
+   162                                                       },
+   163         9          3.4      0.4      0.0              timeout=None,
+   164                                                   ).json()
+   165                                                   
+   166         8        649.5     81.2      0.0          model_input = response['model_input']
+   167         8          7.2      0.9      0.0          reranking_scores = response['reranking_scores']
+   168                                                   
+   169      2408      13621.0      5.7      0.1          for retrieved_edge, reranking_score in tqdm(zip(retrieved_edges, reranking_scores), total = len(retrieved_edges)):
+   170      2400       1875.7      0.8      0.0              retrieved_edge['reranking_score'] = float(reranking_score)
+   171                                                   
+   172                                                   # Sort edges by reranking score
+   173         8       2089.3    261.2      0.0          reranked_edges = sorted(retrieved_edges, key = lambda x: x['reranking_score'], reverse = True)[:self.cfg.top_k_of_reranked_edges]
+   174                                                   
+   175         8          3.4      0.4      0.0          return reranked_edges
+
+Total time: 0.0161146 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: integrate_into_graph at line 176
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   176                                               @profile
+   177                                               def integrate_into_graph(self, reranked_edges):
+   178         8          8.5      1.1      0.1          bipartite_subgraph_candidates = {}
+   179                                                   
+   180      1208        358.1      0.3      2.2          for reranked_edge in reranked_edges:
+   181      1200        442.0      0.4      2.7              if 'linked_entity_id' in reranked_edge:
+   182                                                           # get edge info
+   183      1200        921.0      0.8      5.7                  table_key = str(reranked_edge['table_id'])
+   184      1200        868.1      0.7      5.4                  row_id = reranked_edge['chunk_id'].split('_')[1]
+   185      1200        479.4      0.4      3.0                  table_segment_node_id = f"{table_key}_{row_id}"
+   186      1200        440.4      0.4      2.7                  passage_id = reranked_edge['linked_entity_id']
+   187                                                           
+   188                                                           # get edge score
+   189      1200        378.7      0.3      2.4                  edge_score = reranked_edge['reranking_score']
+   190                                                           
+   191                                                           # add nodes
+   192      1200       6160.1      5.1     38.2                  self.add_node(bipartite_subgraph_candidates, 'table segment', table_segment_node_id, passage_id, edge_score, 'edge_reranking')
+   193      1200       6055.9      5.0     37.6                  self.add_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_node_id, edge_score, 'edge_reranking')
+   194                                                   
+   195         8          2.4      0.3      0.0          return bipartite_subgraph_candidates
+
+Total time: 4.61376 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: assign_scores_to_nodes at line 196
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   196                                               @profile
+   197                                               def assign_scores_to_nodes(self, question, bipartite_subgraph_candidates):
+   198         8        480.4     60.0      0.0          if self.cfg.node_scoring_method == 'direct':
+   199         8          4.0      0.5      0.0              node_text_list = []
+   200         8          6.2      0.8      0.0              node_id_list = []
+   201      1475        516.3      0.4      0.0              for node_id, node_info in bipartite_subgraph_candidates.items():
+   202      1467        454.2      0.3      0.0                  if 'score' in node_info:
+   203                                                               continue
+   204                                                           
+   205      1467        517.6      0.4      0.0                  if node_info['type'] == 'table segment':
+   206       810        450.4      0.6      0.0                      table_id = node_id.split('_')[0]
+   207       810        591.8      0.7      0.0                      row_id = int(node_id.split('_')[1])
+   208       810        690.7      0.9      0.0                      table_content = self.table_key_to_content[table_id]
+   209       810        381.0      0.5      0.0                      table_title = table_content['title']
+   210       810       1477.7      1.8      0.0                      table_rows = table_content['text'].split('\n')
+   211       810        270.9      0.3      0.0                      column_names = table_rows[0]
+   212       810        304.5      0.4      0.0                      row_values = table_rows[row_id+1]
+   213       810        650.0      0.8      0.0                      table_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
+   214       810        343.1      0.4      0.0                      node_text_list.append(table_text)
+   215       810        307.9      0.4      0.0                      node_id_list.append(node_id)
+   216       657        243.8      0.4      0.0                  elif node_info['type'] == 'passage':
+   217       657        795.2      1.2      0.0                      passage_content = self.passage_key_to_content[node_id]
+   218       657       1040.6      1.6      0.0                      passage_text = passage_content['title'] + ' [SEP] ' + passage_content['text']
+   219       657        269.7      0.4      0.0                      node_text_list.append(passage_text)
+   220       657        238.1      0.4      0.0                      node_id_list.append(node_id)
+   221                                                       
+   222         8        615.7     77.0      0.0              model_input = [[question, node_text] for node_text in node_text_list]
+   223                                                       
+   224        16    4600941.5 287558.8     99.7              response = requests.post(
+   225         8          8.4      1.1      0.0                  self.reranker_addr,
+   226         8          9.3      1.2      0.0                  json={
+   227         8          3.2      0.4      0.0                      "model_input": model_input,
+   228         8        471.1     58.9      0.0                      "max_length": self.cfg.reranking_node_max_length
+   229                                                           },
+   230         8          3.1      0.4      0.0                  timeout=None,
+   231                                                       ).json()
+   232                                           
+   233         8        159.0     19.9      0.0              model_input = response['model_input']
+   234         8          4.8      0.6      0.0              reranking_scores = response['reranking_scores']
+   235                                           
+   236                                                       # Assign the computed score to the node
+   237      1475        651.0      0.4      0.0              for node_id, node_score in zip(node_id_list, reranking_scores):
+   238      1467        862.9      0.6      0.0                  bipartite_subgraph_candidates[node_id]['score'] = node_score
+   239                                                       
+   240                                                   else:
+   241                                                       self.approximate_with_edge_scores(bipartite_subgraph_candidates)
+
+Total time: 0 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: approximate_with_edge_scores at line 242
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   242                                               @profile
+   243                                               def approximate_with_edge_scores(self, bipartite_subgraph_candidates):
+   244                                                   # Filter linked scores based on retrieval_type if provided
+   245                                                   for node_id, node_info in bipartite_subgraph_candidates.items():
+   246                                                       linked_scores = [linked_node[1] for linked_node in node_info['linked_nodes']]
+   247                                           
+   248                                                       # Assign scores based on the selected method
+   249                                                       if self.node_scoring_method == 'min':
+   250                                                           node_score = min(linked_scores) if linked_scores else self.cfg.min_edge_score
+   251                                                       elif self.node_scoring_method == 'max':
+   252                                                           node_score = max(linked_scores) if linked_scores else self.cfg.min_edge_score
+   253                                                       elif self.node_scoring_method == 'mean':
+   254                                                           node_score = sum(linked_scores) / len(linked_scores) if linked_scores else self.cfg.min_edge_score
+   255                                                           
+   256                                                       # Assign the computed score to the node
+   257                                                       bipartite_subgraph_candidates[node_id]['score'] = node_score
+
+Total time: 14.8644 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: augment_nodes at line 258
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   258                                               @profile
+   259                                               def augment_nodes(self, nl_question, integrated_graph):
+   260         8          7.4      0.9      0.0          node_list = []
+   261      1475        439.0      0.3      0.0          for node_id, node_info in integrated_graph.items():
+   262      1467        760.1      0.5      0.0              node_list.append((node_id, node_info['score'], node_info['type']))
+   263                                                   
+   264         8       1430.7    178.8      0.0          topk_query_nodes = sorted(node_list, key=lambda x: x[1], reverse=True)[:self.cfg.top_k_of_query]
+   265                                                   
+   266         8   14861802.4    2e+06    100.0          self.expanded_query_retrieval(integrated_graph, nl_question, topk_query_nodes)
+
+Total time: 14.8502 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: expanded_query_retrieval at line 267
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   267                                               @profile
+   268                                               def expanded_query_retrieval(self, graph, nl_question, topk_query_nodes):
+   269         8          4.0      0.5      0.0          edge_count_list = []
+   270         8          2.6      0.3      0.0          edge_total_list = []
+   271         8          3.0      0.4      0.0          target_node_id_list = []
+   272                                                   
+   273        88        156.4      1.8      0.0          for source_rank, (query_node_id, query_node_score, query_node_type) in enumerate(topk_query_nodes):
+   274                                                       
+   275        80       4445.1     55.6      0.0              expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
+   276                                                       
+   277        80         65.2      0.8      0.0              if query_node_type == 'table segment':
+   278        74         47.8      0.6      0.0                  target_node_type = 'passage'
+   279        74        111.0      1.5      0.0                  table_key = query_node_id.split('_')[0]
+   280        74        118.6      1.6      0.0                  row_id = int(query_node_id.split('_')[1])
+   281        74         85.1      1.2      0.0                  table = self.table_key_to_content[table_key]
+   282        74         67.5      0.9      0.0                  table_title = table['title']
+   283        74        256.5      3.5      0.0                  table_column_names = table['text'].split('\n')[0]
+   284        74        239.6      3.2      0.0                  table_row_values = table['text'].split('\n')[row_id+1]
+   285        74        115.3      1.6      0.0                  query_node_text = f"{table_title} [SEP] {table_column_names} [SEP] {table_row_values}"
+   286       148   11308660.4  76409.9     76.2                  response = requests.post(
+   287        74         66.6      0.9      0.0                      self.passage_retriever_addr,
+   288        74        105.1      1.4      0.0                      json={
+   289        74         41.6      0.6      0.0                          "query": expanded_query,
+   290        74      10629.4    143.6      0.1                          "k": self.cfg.top_k_of_target
+   291                                                               },
+   292        74         48.5      0.7      0.0                      timeout=None,
+   293                                                           ).json()
+   294                                                           
+   295        74        218.6      3.0      0.0                  retrieved_node_id_list = response['retrieved_key_list']
+   296                                                       else:
+   297         6          5.9      1.0      0.0                  target_node_type = 'table segment'
+   298         6          9.2      1.5      0.0                  passage = self.passage_key_to_content[query_node_id]
+   299         6         18.8      3.1      0.0                  query_node_text = f"{passage['title']} [SEP] {passage['text']}"
+   300        12     962806.5  80233.9      6.5                  response = requests.post(
+   301         6          8.4      1.4      0.0                      self.table_segment_retriever_addr,
+   302         6         13.0      2.2      0.0                      json={
+   303         6          4.4      0.7      0.0                          "query": expanded_query,
+   304         6       1058.1    176.3      0.0                          "k": self.cfg.top_k_of_target
+   305                                                               },
+   306         6          5.3      0.9      0.0                      timeout=None,
+   307                                                           ).json()
+   308                                                           
+   309         6         18.5      3.1      0.0                  retrieved_node_id_list = response['retrieved_key_list']
+   310                                                       
+   311        80        136.5      1.7      0.0              edge_text_list = []
+   312       480        442.4      0.9      0.0              for retrieved_node_id in retrieved_node_id_list:
+   313       400        356.4      0.9      0.0                  if target_node_type == 'passage':
+   314       370       2789.9      7.5      0.0                      passage_text = self.passage_key_to_content[retrieved_node_id]['text']
+   315       370        318.3      0.9      0.0                      target_text = passage_text
+   316                                                           else:
+   317        30         73.8      2.5      0.0                      table_key = retrieved_node_id.split('_')[0]
+   318        30         86.3      2.9      0.0                      row_id = int(retrieved_node_id.split('_')[1])
+   319        30        275.5      9.2      0.0                      table_content = self.table_key_to_content[table_key]
+   320        30        171.2      5.7      0.0                      table_title = table_content['title']
+   321        30        292.1      9.7      0.0                      table_rows = table_content['text'].split('\n')
+   322        30         34.1      1.1      0.0                      column_names = table_rows[0]
+   323        30         57.1      1.9      0.0                      row_values = table_rows[1:][row_id]
+   324        30         81.9      2.7      0.0                      target_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
+   325                                                           
+   326       400       1278.0      3.2      0.0                  edge_text = f"{query_node_text} [SEP] {target_text}"
+   327       400        491.5      1.2      0.0                  edge_text_list.append(edge_text)
+   328                                                       
+   329        80        182.2      2.3      0.0              edge_count_list.append(len(edge_text_list))
+   330        80        140.0      1.8      0.0              edge_total_list.extend(edge_text_list)
+   331        80        110.0      1.4      0.0              target_node_id_list.extend(retrieved_node_id_list)
+   332                                                       
+   333                                                   # predict scores with reranker
+   334         8        343.2     42.9      0.0          model_input = [[nl_question, edge] for edge in edge_total_list]
+   335                                                   
+   336        16    2475567.9 154723.0     16.7          response = requests.post(
+   337         8         18.4      2.3      0.0              self.reranker_addr,
+   338         8         19.9      2.5      0.0              json={
+   339         8          9.1      1.1      0.0                  "model_input": model_input,
+   340         8       1722.7    215.3      0.0                  "max_length": self.cfg.reranking_edge_max_length
+   341                                                       },
+   342         8         10.9      1.4      0.0              timeout=None,
+   343                                                   ).json()
+   344                                           
+   345         8         89.6     11.2      0.0          model_input = response['model_input']
+   346         8         12.3      1.5      0.0          reranking_scores = response['reranking_scores']
+   347                                                       
+   348         8       1735.7    217.0      0.0          pred_scores = torch.tensor(reranking_scores)
+   349                                           
+   350                                                   # decompose pred_scores by using edge_count_list
+   351         8         13.1      1.6      0.0          start_idx = 0
+   352        88        174.5      2.0      0.0          for source_rank, (query_node_id, query_node_score, query_node_type) in enumerate(topk_query_nodes):
+   353        80        120.4      1.5      0.0              if query_node_type == 'table segment':
+   354        74         88.0      1.2      0.0                  target_node_type = 'passage'
+   355                                                       else:
+   356         6          7.7      1.3      0.0                  target_node_type = 'table segment'
+   357                                                       
+   358        80        137.9      1.7      0.0              end_idx = start_idx + edge_count_list[source_rank]
+   359        80      31552.9    394.4      0.2              sorted_idx = torch.argsort(pred_scores[start_idx:end_idx], descending=True)
+   360       480       4578.2      9.5      0.0              for target_rank, idx in enumerate(sorted_idx):
+   361       400      11375.2     28.4      0.1                  target_node_id = target_node_id_list[start_idx + idx]
+   362       400        477.0      1.2      0.0                  augment_type = f'node_augmentation'
+   363       400      13698.9     34.2      0.1                  query_node_score = float(pred_scores[start_idx + idx])
+   364       400       6292.4     15.7      0.0                  self.add_node(graph, query_node_type, query_node_id, target_node_id, query_node_score, augment_type, source_rank, target_rank)
+   365       400       5265.9     13.2      0.0                  self.add_node(graph, target_node_type, target_node_id, query_node_id, query_node_score, augment_type, target_rank, source_rank)
+   366        80        104.6      1.3      0.0              start_idx = end_idx
+
+Total time: 0.00160571 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: get_expanded_query at line 367
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   367                                               @profile
+   368                                               def get_expanded_query(self, nl_question, node_id, query_node_type):
+   369        80        127.6      1.6      7.9          if query_node_type == 'table segment':
+   370        74        196.9      2.7     12.3              table_key = node_id.split('_')[0]
+   371        74        226.8      3.1     14.1              table = self.table_key_to_content[table_key]
+   372        74         98.3      1.3      6.1              table_title = table['title']
+   373                                                       
+   374        74        223.7      3.0     13.9              row_id = int(node_id.split('_')[1])
+   375        74        282.8      3.8     17.6              table_rows = table['text'].split('\n')
+   376        74         60.9      0.8      3.8              column_name = table_rows[0]
+   377        74         83.6      1.1      5.2              row_values = table_rows[row_id+1]
+   378                                                       
+   379        74        165.1      2.2     10.3              expanded_query = f"{nl_question} [SEP] {table_title} [SEP] {column_name} [SEP] {row_values}"
+   380                                                   else:
+   381         6         35.3      5.9      2.2              passage = self.passage_key_to_content[node_id]
+   382         6         19.4      3.2      1.2              passage_title = passage['title']
+   383         6         10.9      1.8      0.7              passage_text = passage['text']
+   384                                                       
+   385         6         19.3      3.2      1.2              expanded_query = f"{nl_question} [SEP] {passage_title} [SEP] {passage_text}"
+   386                                                   
+   387        80         55.1      0.7      3.4          return expanded_query
+
+Total time: 74.455 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: find_bipartite_subgraph at line 389
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   389                                               @profile
+   390                                               def find_bipartite_subgraph(self, question, bipartite_subgraph_candidates):
+   391         8      18681.0   2335.1      0.0          bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids = self.get_bipartite_subgraph_candidate_list(bipartite_subgraph_candidates)
+   392                                                   
+   393         8    5123003.3 640375.4      6.9          is_aggregate = self.llm_node_selector.detect_aggregation_query(question)
+   394         8         15.9      2.0      0.0          if is_aggregate:
+   395         3   16150207.4    5e+06     21.7              selected_rows = self.llm_node_selector.select_row_wise(question, table_id_to_row_id_to_linked_passage_ids)
+   396         3          9.8      3.3      0.0              if len(selected_rows) != 0:
+   397         2          2.5      1.3      0.0                  for table_id, row_id, linked_passage_ids in selected_rows:
+   398         1          2.7      2.7      0.0                      table_segment_id = f"{table_id}_{row_id}"
+   399         1          7.6      7.6      0.0                      if table_segment_id not in [bipartite_subgraph_candidate['table_segment_id'] for bipartite_subgraph_candidate in bipartite_subgraph_candidate_list]:
+   400                                                                   bipartite_subgraph_candidate_list.append({"table_segment_id":table_segment_id, "linked_passage_ids": linked_passage_ids})
+   401                                           
+   402         8   53157420.8    7e+06     71.4          table_segment_id_to_passage_id_list = self.llm_node_selector.select_passage_wise(question, bipartite_subgraph_candidate_list)
+   403                                                   
+   404        32         50.0      1.6      0.0          for table_segment_id, passage_id_list in table_segment_id_to_passage_id_list.items():
+   405        48         50.9      1.1      0.0              for passage_id in passage_id_list:
+   406        24       3155.0    131.5      0.0                  self.add_node(bipartite_subgraph_candidates, 'table segment', table_segment_id, passage_id, self.cfg.max_edge_score, 'llm_selected')
+   407        24       2372.8     98.9      0.0                  self.add_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_id, self.cfg.max_edge_score, 'llm_selected')
+
+Total time: 0.0135836 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: get_bipartite_subgraph_candidate_list at line 409
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   409                                               @profile
+   410                                               def get_bipartite_subgraph_candidate_list(self, bipartite_subgraph_candidates):
+   411         8          9.0      1.1      0.1          table_segment_id_to_linked_passage_ids = {}
+   412         8          8.1      1.0      0.1          table_id_to_row_id_to_linked_passage_ids = {}
+   413         8          8.2      1.0      0.1          bipartite_subgraph_candidate_list = []
+   414                                                   
+   415         8       6657.8    832.2     49.0          sorted_node_list = sorted(bipartite_subgraph_candidates.items(), key=lambda x: max([node_info[1] for node_info in x[1]['linked_nodes']]), reverse=True)
+   416                                                   
+   417      1710       1301.2      0.8      9.6          for node_id, node_info in sorted_node_list:
+   418      1702       1370.0      0.8     10.1              if node_info['type'] == 'table segment':
+   419       833       3678.9      4.4     27.1                  table_segment_id_to_linked_passage_ids[node_id] = list(set([node_info[0] for node_info in node_info['linked_nodes']]))
+   420                                                   
+   421        24         39.7      1.7      0.3          for table_segment_id, linked_passage_ids in table_segment_id_to_linked_passage_ids.items():
+   422        24         56.0      2.3      0.4              table_id = table_segment_id.split('_')[0]
+   423        24         37.3      1.6      0.3              row_id = table_segment_id.split('_')[1]
+   424                                                       
+   425        24         37.9      1.6      0.3              if table_id not in table_id_to_row_id_to_linked_passage_ids:
+   426        18         20.9      1.2      0.2                  table_id_to_row_id_to_linked_passage_ids[table_id] = {}
+   427                                                       
+   428        24         32.8      1.4      0.2              if row_id not in table_id_to_row_id_to_linked_passage_ids[table_id]:
+   429        24         32.0      1.3      0.2                  table_id_to_row_id_to_linked_passage_ids[table_id][row_id] = []
+   430                                                           
+   431        24         42.3      1.8      0.3              table_id_to_row_id_to_linked_passage_ids[table_id][row_id].extend(linked_passage_ids)
+   432                                                       
+   433        48         47.9      1.0      0.4              bipartite_subgraph_candidate_list.append(
+   434        24         29.2      1.2      0.2                  {
+   435        24         18.1      0.8      0.1                      "table_segment_id": table_segment_id, 
+   436        24         95.9      4.0      0.7                      "linked_passage_ids": list(set(table_id_to_row_id_to_linked_passage_ids[table_id][row_id]))
+   437                                                           }
+   438                                                       )
+   439                                           
+   440        24         38.9      1.6      0.3              if len(bipartite_subgraph_candidate_list) >= 3:
+   441         8         12.8      1.6      0.1                  break
+   442                                           
+   443         8          8.5      1.1      0.1          return bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids
+
+Total time: 0.00551983 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: add_node at line 444
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   444                                               @profile
+   445                                               def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type, source_rank = 0, target_rank = 0):
+   446      3248       1850.9      0.6     33.5          if source_node_id not in graph:
+   447      1702       1703.8      1.0     30.9              graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type, source_rank, target_rank]]}
+   448                                                   else:
+   449      1546       1965.2      1.3     35.6              graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
+
+Total time: 0 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: find_relevant_nodes at line 451
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   451                                               @profile
+   452                                               def find_relevant_nodes(self, nl_question, reduced_search_space):
+   453                                                   table_segment_id_to_augmented_nodes, table_id_to_augmented_nodes = self.get_table(reduced_search_space)
+   454                                           
+   455                                                   selected_table_segment_list = self.get_linked_passages(table_segment_id_to_augmented_nodes)
+   456                                                   
+   457                                                   if table_id_to_augmented_nodes != {}:
+   458                                                       table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info \
+   459                                                                                           = self.combine_linked_passages(table_id_to_augmented_nodes)
+   460                                                       
+   461                                                       selected_table_segment_list_from_llm = self.select_table_segments(
+   462                                                                                                   nl_question, 
+   463                                                                                                   table_id_to_row_id_to_linked_passage_ids,
+   464                                                                                                   table_id_to_table_info
+   465                                                                                               )
+   466                                                       selected_table_segment_list.extend(selected_table_segment_list_from_llm)
+   467                                                   
+   468                                                   self.select_passages(nl_question, selected_table_segment_list, reduced_search_space)
+   469                                                   retrieval_type = 'edge_reranking'
+   470                                                   # self.assign_scores(nl_question, reduced_search_space, retrieval_type)
+
+Total time: 0 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: select_table_segments at line 543
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   543                                               @profile
+   544                                               def select_table_segments(self, nl_question, table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info):
+   545                                                   
+   546                                                   prompt_list = []
+   547                                                   table_id_list = []
+   548                                                   
+   549                                                   for table_id in table_id_to_table_info.keys():
+   550                                                       table_and_linked_passages = self.stringify_table_and_linked_passages(
+   551                                                                                           table_id_to_table_info[table_id],
+   552                                                                                           table_id_to_row_id_to_linked_passage_ids[table_id]
+   553                                                                                       )
+   554                                                       contents_for_prompt = {'question': nl_question, 'table_and_linked_passages': table_and_linked_passages}
+   555                                                       prompt = self.get_prompt(contents_for_prompt)
+   556                                                       prompt_list.append(prompt)
+   557                                                       table_id_list.append(table_id)
+   558                                                       
+   559                                                   response_list = requests.post(
+   560                                                           self.llm_addr,
+   561                                                           json={
+   562                                                               "prompt_list": prompt_list,
+   563                                                               "max_tokens": 64
+   564                                                           },
+   565                                                           timeout=None,
+   566                                                       ).json()["response_list"]
+   567                                                   
+   568                                                   selected_table_segment_list = []
+   569                                                   for table_id, response in zip(table_id_list, response_list):
+   570                                                       selected_rows = response
+   571                                                       if selected_rows is None:
+   572                                                           continue
+   573                                                       
+   574                                                       try:
+   575                                                           selected_rows = ast.literal_eval(selected_rows)
+   576                                                           selected_rows = [string.strip() for string in selected_rows]
+   577                                                       except:
+   578                                                           selected_rows = [selected_rows.strip()]
+   579                                                           
+   580                                                       for selected_row in selected_rows:
+   581                                                           try:
+   582                                                               row_id = selected_row.split('_')[1]
+   583                                                               row_id = str(int(row_id) - 1)
+   584                                                               _ = table_id_to_row_id_to_linked_passage_ids[table_id][row_id]
+   585                                                           except:
+   586                                                               continue
+   587                                                           
+   588                                                           selected_table_segment_list.append(
+   589                                                               {
+   590                                                                   "table_segment_node_id": f"{table_id}_{row_id}", 
+   591                                                                   "linked_passages": table_id_to_row_id_to_linked_passage_ids[table_id][row_id]
+   592                                                               }
+   593                                                           )
+   594                                                       
+   595                                                   return selected_table_segment_list
+
+Total time: 0 s
+File: /home/shpark/OTT_QA_Workspace/Algorithms/Ours/bipartite_subgraph_retrieval.py
+Function: select_passages at line 630
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   630                                               @profile
+   631                                               def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
+   632                                                   
+   633                                                   prompt_list = []
+   634                                                   table_segment_node_id_list = []
+   635                                                   
+   636                                                   # 1. Generate prompt which contains the table segment and its linked passages
+   637                                                   for selected_table_segment in selected_table_segment_list:
+   638                                                       table_segment_node_id = selected_table_segment['table_segment_node_id']
+   639                                                       linked_passages = selected_table_segment['linked_passages']
+   640                                                       table_key = table_segment_node_id.split('_')[0]
+   641                                                       table = self.table_key_to_content[table_key]
+   642                                                       table_title = table['title']
+   643                                                       row_id = int(table_segment_node_id.split('_')[1])
+   644                                                       table_rows = table['text'].split('\n')
+   645                                                       column_name = table_rows[0]
+   646                                                       row_values = table_rows[row_id + 1]
+   647                                                       table_segment_text = column_name + '\n' + row_values
+   648                                                       table_segment_content = {"title": table_title, "content": table_segment_text}
+   649                                                       linked_passage_contents = []
+   650                                                       for linked_passage_id in linked_passages:
+   651                                                           if linked_passage_id not in self.passage_key_to_content:
+   652                                                               continue
+   653                                                           
+   654                                                           linked_passage_contents.append({"title":linked_passage_id, "content": self.passage_key_to_content[linked_passage_id]['text']})
+   655                                                           
+   656                                                       graph = {"table_segment": table_segment_content, "linked_passages": linked_passage_contents}
+   657                                           
+   658                                                       table_segment = graph['table_segment']
+   659                                                       table_segment_content = f"Table Title: {table_segment['title']}" + "\n" + table_segment['content']\
+   660                                                                                                                                               .replace(' , ', '[special tag]')\
+   661                                                                                                                                               .replace(', ', ' | ')\
+   662                                                                                                                                               .replace('[special tag]', ' , ')
+   663                                                       
+   664                                                       linked_passages = graph['linked_passages']
+   665                                                       linked_passage_contents = ""
+   666                                                       for linked_passage in linked_passages:
+   667                                                           title = linked_passage['title']
+   668                                                           content = linked_passage['content']
+   669                                                           response = requests.post(
+   670                                                               self.trim_addr,
+   671                                                               json={
+   672                                                                   "raw_text": content,
+   673                                                                   "trim_length": self.cfg.passage_trim_length
+   674                                                               },
+   675                                                               timeout=None,
+   676                                                           ).json()
+   677                                                           trimmed_text = response["trimmed_text"]
+   678                                                           linked_passage_contents += f"Title: {title}. Content: {trimmed_text}\n\n"
+   679                                           
+   680                                                       contents_for_prompt = {"question": nl_question, "table_segment": table_segment_content, "linked_passages": linked_passage_contents}
+   681                                                       prompt = self.get_prompt(contents_for_prompt)
+   682                                                       prompt_list.append(prompt)
+   683                                                       table_segment_node_id_list.append(table_segment_node_id)
+   684                                                   
+   685                                                   # 2. Run LLM
+   686                                                   response_list = requests.post(
+   687                                                           self.llm_addr,
+   688                                                           json={
+   689                                                               "prompt_list": prompt_list,
+   690                                                               "max_tokens": 128
+   691                                                           },
+   692                                                           timeout=None,
+   693                                                       ).json()["response_list"]
+   694                                                   
+   695                                                   # 3. Parse LLM results and add the top 
+   696                                                   for table_segment_node_id, response in zip(table_segment_node_id_list, response_list):
+   697                                                       selected_passage_id_list = response
+   698                                                       try:    selected_passage_id_list = ast.literal_eval(selected_passage_id_list)
+   699                                                       except: selected_passage_id_list = [selected_passage_id_list]
+   700                                                       
+   701                                                       
+   702                                                       if selected_passage_id_list is None:
+   703                                                           continue
+   704                                                       
+   705                                                       for selected_passage_id in selected_passage_id_list:
+   706                                                           if selected_passage_id not in self.passage_key_to_content: continue
+   707                                                           self.add_node(integrated_graph, 'table segment', table_segment_node_id, selected_passage_id,   self.cfg.max_edge_score, 'llm_selected')
+   708                                                           self.add_node(integrated_graph, 'passage',       selected_passage_id,   table_segment_node_id, self.cfg.max_edge_score, 'llm_selected')
+

@@ -20,12 +20,12 @@ checkpoint_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_
 retriever = ColBERTRetriever(index_name, ids_path, collection_path, index_root_path, checkpoint_path)
 
 # Initilaize Edge Content
-EDGES_NUM = 17151500
-edge_dataset_path = "/mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_edge_1.jsonl"
-edge_key_to_content = read_jsonl(edge_dataset_path, key = 'chunk_id', num = EDGES_NUM)
+EDGES_NUM = 6252155
+star_dataset_path = "/mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_star.jsonl"
+star_key_to_content = read_jsonl(star_dataset_path, key = 'chunk_id', num = EDGES_NUM)
 
-@app.route("/edge_retrieve", methods=["GET", "POST", "OPTIONS"])
-def edge_retrieve():
+@app.route("/star_retrieve", methods=["GET", "POST", "OPTIONS"])
+def star_retrieve():
     # Handle GET and POST requests
     if request.method == "POST":
         params: Dict = request.json
@@ -38,11 +38,24 @@ def edge_retrieve():
     retrieved_key_list, retrieved_score_list = retriever.search(query, k=k)
     
     edge_content_list = []
+    edge_score_list = []
+    for key, score in zip(retrieved_key_list, retrieved_score_list):
+        content = star_key_to_content[key]
+        if 'mentions_in_row_info_dict' not in content:
+            continue
+        table_id = key.split('_')[0]
+        row_id = key.split('_')[1]
+        mentions_in_row_info_dict = content['mentions_in_row_info_dict']
+        
+        for mention_id, mention_info in mentions_in_row_info_dict.items():
+            linked_passage = mention_info['mention_linked_entity_id_list'][0]
+            table_id = table_id
+            linked_entity_id = linked_passage
+            edge_content = {"chunk_id":key, "table_id":table_id, "linked_entity_id":linked_entity_id}
+            edge_content_list.append(edge_content)
+            edge_score_list.append(score)
 
-    for key in retrieved_key_list:
-        edge_content_list.append(edge_key_to_content[key])
-
-    response = {"edge_content_list": edge_content_list, "retrieved_score_list": retrieved_score_list}
+    response = {"edge_content_list": edge_content_list, "retrieved_score_list": edge_score_list}
 
     return response
 

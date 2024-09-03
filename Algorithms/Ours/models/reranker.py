@@ -11,7 +11,6 @@ class Reranker:
                  checkpoint_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/Merged_BAAI_RERANKER_15_96_ckpt_400", 
                  process_num = 4, 
                  cutoff_layer = 28,
-                 max_length = 256,
                 ):
         self.process_num = process_num
         self.reranker_list = []
@@ -50,7 +49,7 @@ class Reranker:
         if model_input == []:
             return []
         
-        reranking_scores = reranker.compute_score(model_input, batch_size=80, cutoff_layers=[self.cutoff_layer], max_length=max_length)
+        reranking_scores = reranker.compute_score(model_input, batch_size=60, cutoff_layers=[self.cutoff_layer], max_length=max_length)
         
         if len(model_input) == 1:
             reranking_scores = [reranking_scores]

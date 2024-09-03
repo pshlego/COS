@@ -7,7 +7,7 @@ from tqdm import tqdm
 from omegaconf import DictConfig
 from transformers import set_seed
 from utils.helper import NoIndent, MyEncoder
-from prompt.prompts_v2 import detect_aggregation_query_prompt, select_row_wise_prompt, select_passages_prompt, select_passages_prompt_v2
+from prompt.prompts_v2 import detect_aggregation_query_prompt, select_row_wise_prompt, select_passages_prompt_v2
 
 set_seed(0)
 
@@ -77,7 +77,6 @@ class LlmNodeSelector:
         self.trim_addr = "http://localhost:5004/trim"
         
     def detect_aggregation_query(self, query):
-        prompt = "" + self.detect_aggregation_query_prompt.rstrip() + "\n\n"
         prompt = self.generate_detect_aggregation_query_prompt(query)
         response_list = requests.post(
                 self.llm_addr,
@@ -136,6 +135,8 @@ class LlmNodeSelector:
         selected_rows = []
         for table_id, row_id_list in selected_table_id_to_row_id_list.items():
             for row_id in row_id_list:
+                if str(row_id) not in table_id_to_row_id_to_linked_passage_ids[str(table_id)]:
+                    continue
                 linked_passage_ids = table_id_to_row_id_to_linked_passage_ids[str(table_id)][str(row_id)]
                 selected_rows.append([table_id, row_id, linked_passage_ids])
         
@@ -154,7 +155,7 @@ class LlmNodeSelector:
                 self.llm_addr,
                 json={
                     "prompt_list": prompt_list,
-                    "max_tokens": 64
+                    "max_tokens": 128
                 },
                 timeout=None,
             ).json()["response_list"]
@@ -183,9 +184,7 @@ class LlmNodeSelector:
 
     
     def generate_detect_aggregation_query_prompt(self, query):
-        prompt = "" + self.detect_aggregation_query_prompt.rstrip() + "\n\n"
-        prompt += f"question : {query}.\n"
-        prompt += "The answer is : "
+        prompt = self.detect_aggregation_query_prompt.format(question=query)
         return prompt
     
     def generate_select_row_wise_prompt(self, query, table_id, row_id_to_linked_passage_ids):
@@ -215,11 +214,7 @@ class LlmNodeSelector:
                 trimmed_text = response["trimmed_text"]
                 linked_passages_prompt_text += f"Title: {passage_content['title']}. Content: {trimmed_text}\n"
 
-        prompt += "/*\n" + table_prompt_text + "\n*/\n\n"
-        prompt += "/*\n" + linked_passages_prompt_text + "\n*/\n\n"
-        prompt += f"question : {query}.\n"
-        prompt += "The answer is : "
-
+        prompt = self.select_row_wise_prompt.format(question=query, table=table_text, linked_passages=linked_passages_prompt_text)
         return prompt
     
     def generate_select_passages_prompt(self, question, table_id, row_id, linked_passage_ids):
