@@ -5,6 +5,7 @@ import hydra
 import torch
 import requests
 from tqdm import tqdm
+import torch.nn.functional as F
 from omegaconf import DictConfig
 from transformers import set_seed
 from llm_based_retrieval import LlmNodeSelector
@@ -24,10 +25,15 @@ def main(cfg: DictConfig):
     print(f"[[ Loading graph query engine... ]]", end = "\n\n")
     graph_query_engine = GraphQueryEngine(cfg)
     print(f"Graph query engine loaded successfully!", end = "\n\n")
-
+    # data_graph_error_cases = json.load(open("/home/shpark/OTT_QA_Workspace/data_graph_error_case.json"))
+    # error_cases_id_list = [data_graph_error_case['id'] for data_graph_error_case in data_graph_error_cases]
+    # data_graph_error_case_dict = {data_graph_error_case['id']: data_graph_error_case for data_graph_error_case in data_graph_error_cases}
     print(f"Start querying...")
     for qidx, qa_datum in tqdm(enumerate(qa_dataset), total = len(qa_dataset)):
+        # if qa_datum['id'] not in error_cases_id_list:
+        #     continue
         # query graph for each question
+        # error_case = data_graph_error_case_dict[qa_datum['id']]
         question = qa_datum['question']
         init_time = time.time()
         retrieved_graph = graph_query_engine.query(question)
@@ -79,7 +85,7 @@ class GraphQueryEngine:
         self.select_table_segment_prompt = select_table_segment_prompt
 
         self.llm_node_selector = LlmNodeSelector(cfg, self.table_key_to_content, self.passage_key_to_content)
-    @profile
+    #@profile
     def query(self, question):
         # 1. Search bipartite subgraph candidates
         bipartite_subgraph_candidates = self.search_bipartite_subgraph_candidates(question)
@@ -92,7 +98,7 @@ class GraphQueryEngine:
         return bipartite_subgraph_candidates
         # return bipartite_subgraph
 
-    @profile
+    #@profile
     def search_bipartite_subgraph_candidates(self, question):
         # 1.1 Retrieve edges
         retrieved_edges = self.retrieve_edges(question)
@@ -110,34 +116,21 @@ class GraphQueryEngine:
         self.augment_nodes(question, bipartite_subgraph_candidates)
         
         return bipartite_subgraph_candidates
-    @profile
+    #@profile
     def retrieve_edges(self, question):
         response = requests.post(
             self.edge_retriever_addr,
             json={
                 "query": question,
-                "k": 10000
+                "k": self.cfg.top_k_of_retrieved_edges
             },
             timeout=None,
         ).json()
         
-        edge_content_list = response['edge_content_list']
-        edge_score_list = response['retrieved_score_list']
-        
-        retrieved_edges = []
-        for edge_content, edge_score in zip(edge_content_list, edge_score_list):
-            # pass single node graph
-            if 'linked_entity_id' not in edge_content:
-                continue
-            
-            edge_content['retrieval_score'] = edge_score
-            retrieved_edges.append(edge_content)
-            
-            if len(retrieved_edges) == self.cfg.top_k_of_retrieved_edges:
-                break
+        retrieved_edges = response['edge_content_list']
         
         return retrieved_edges
-    @profile
+    #@profile
     def rerank_edges(self, question, retrieved_edges):
         model_input = []
         for element in retrieved_edges:
@@ -173,7 +166,7 @@ class GraphQueryEngine:
         reranked_edges = sorted(retrieved_edges, key = lambda x: x['reranking_score'], reverse = True)[:self.cfg.top_k_of_reranked_edges]
         
         return reranked_edges
-    @profile
+    #@profile
     def integrate_into_graph(self, reranked_edges):
         bipartite_subgraph_candidates = {}
         
@@ -193,7 +186,7 @@ class GraphQueryEngine:
                 self.add_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_node_id, edge_score, 'edge_reranking')
         
         return bipartite_subgraph_candidates
-    @profile
+    #@profile
     def assign_scores_to_nodes(self, question, bipartite_subgraph_candidates):
         if self.cfg.node_scoring_method == 'direct':
             node_text_list = []
@@ -239,7 +232,7 @@ class GraphQueryEngine:
             
         else:
             self.approximate_with_edge_scores(bipartite_subgraph_candidates)
-    @profile
+    #@profile
     def approximate_with_edge_scores(self, bipartite_subgraph_candidates):
         # Filter linked scores based on retrieval_type if provided
         for node_id, node_info in bipartite_subgraph_candidates.items():
@@ -255,22 +248,28 @@ class GraphQueryEngine:
                 
             # Assign the computed score to the node
             bipartite_subgraph_candidates[node_id]['score'] = node_score
-    @profile
+
+    #@profile
     def augment_nodes(self, nl_question, integrated_graph):
         node_list = []
         for node_id, node_info in integrated_graph.items():
             node_list.append((node_id, node_info['score'], node_info['type']))
         
-        topk_query_nodes = sorted(node_list, key=lambda x: x[1], reverse=True)[:self.cfg.top_k_of_query]
+        # Softmax를 이용해 Query Node의 Score를 확률값으로 변환
+        node_scores = torch.tensor([node[1] for node in node_list])
+        node_probs = F.softmax(node_scores, dim=0)
+        
+        # 확률값과 node_id, type을 함께 저장
+        topk_query_nodes = sorted(zip(node_list, node_probs), key=lambda x: x[1], reverse=True)[:self.cfg.beam_size]
         
         self.expanded_query_retrieval(integrated_graph, nl_question, topk_query_nodes)
-    @profile
+
+    #@profile
     def expanded_query_retrieval(self, graph, nl_question, topk_query_nodes):
-        edge_count_list = []
-        edge_total_list = []
-        target_node_id_list = []
+        final_prob_list = []  # 최종 확률값을 저장할 리스트
         
-        for source_rank, (query_node_id, query_node_score, query_node_type) in enumerate(topk_query_nodes):
+        for (query_node, query_node_prob) in topk_query_nodes:
+            query_node_id, query_node_score, query_node_type = query_node
             
             expanded_query = self.get_expanded_query(nl_question, query_node_id, query_node_type)
             
@@ -287,12 +286,13 @@ class GraphQueryEngine:
                     self.passage_retriever_addr,
                     json={
                         "query": expanded_query,
-                        "k": self.cfg.top_k_of_target
+                        "k": self.cfg.beam_size
                     },
                     timeout=None,
                 ).json()
                 
                 retrieved_node_id_list = response['retrieved_key_list']
+                retrieved_score_list = response['retrieved_score_list']
             else:
                 target_node_type = 'table segment'
                 passage = self.passage_key_to_content[query_node_id]
@@ -301,36 +301,54 @@ class GraphQueryEngine:
                     self.table_segment_retriever_addr,
                     json={
                         "query": expanded_query,
-                        "k": self.cfg.top_k_of_target
+                        "k": self.cfg.beam_size
                     },
                     timeout=None,
                 ).json()
                 
                 retrieved_node_id_list = response['retrieved_key_list']
-            
-            edge_text_list = []
-            for retrieved_node_id in retrieved_node_id_list:
-                if target_node_type == 'passage':
-                    passage_text = self.passage_key_to_content[retrieved_node_id]['text']
-                    target_text = passage_text
-                else:
-                    table_key = retrieved_node_id.split('_')[0]
-                    row_id = int(retrieved_node_id.split('_')[1])
-                    table_content = self.table_key_to_content[table_key]
-                    table_title = table_content['title']
-                    table_rows = table_content['text'].split('\n')
-                    column_names = table_rows[0]
-                    row_values = table_rows[1:][row_id]
-                    target_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
-                
-                edge_text = f"{query_node_text} [SEP] {target_text}"
-                edge_text_list.append(edge_text)
-            
-            edge_count_list.append(len(edge_text_list))
-            edge_total_list.extend(edge_text_list)
-            target_node_id_list.extend(retrieved_node_id_list)
-            
-        # predict scores with reranker
+                retrieved_score_list = response['retrieved_score_list']
+
+            # retrieved_score_list를 확률값으로 변환
+            retrieved_scores = torch.tensor(retrieved_score_list)
+            retrieved_probs = F.softmax(retrieved_scores, dim=0)
+
+            # Query Node 확률과 retrieved 확률을 곱해서 final_prob 계산
+            for idx, target_node_id in enumerate(retrieved_node_id_list):
+                final_prob = query_node_prob * retrieved_probs[idx]
+                final_prob_list.append((query_node_id, target_node_id, final_prob, query_node_type, target_node_type))
+        
+        # 최종 확률값을 기준으로 정렬하여 상위 beam size만큼 선택
+        final_prob_list = sorted(final_prob_list, key=lambda x: x[2], reverse=True)[:self.cfg.beam_size]
+
+        edge_total_list = []
+        for query_node_id, target_node_id, final_prob, query_node_type, target_node_type in final_prob_list:
+            if query_node_type == 'table segment':
+                table_key = query_node_id.split('_')[0]
+                row_id = int(query_node_id.split('_')[1])
+                table = self.table_key_to_content[table_key]
+                table_title = table['title']
+                table_column_names = table['text'].split('\n')[0]
+                table_row_values = table['text'].split('\n')[row_id+1]
+                query_node_text = f"{table_title} [SEP] {table_column_names} [SEP] {table_row_values}"
+                passage_text = self.passage_key_to_content[target_node_id]['text']
+                target_text = passage_text
+            else:
+                passage = self.passage_key_to_content[query_node_id]
+                query_node_text = f"{passage['title']} [SEP] {passage['text']}"
+                table_key = target_node_id.split('_')[0]
+                row_id = int(target_node_id.split('_')[1])
+                table_content = self.table_key_to_content[table_key]
+                table_title = table_content['title']
+                table_rows = table_content['text'].split('\n')
+                column_names = table_rows[0]
+                row_values = table_rows[1:][row_id]
+                target_text = table_title + ' [SEP] ' + column_names + ' [SEP] ' + row_values
+
+            edge_text = f"{query_node_text} [SEP] {target_text}"
+            edge_total_list.append(edge_text)
+
+        # predict scores with reranker for final beam edges
         model_input = [[nl_question, edge] for edge in edge_total_list]
         
         response = requests.post(
@@ -342,29 +360,16 @@ class GraphQueryEngine:
             timeout=None,
         ).json()
 
-        model_input = response['model_input']
         reranking_scores = response['reranking_scores']
-            
-        pred_scores = torch.tensor(reranking_scores)
+        
+        # reranking_scores와 final_prob_list를 결합
+        for i, (query_node_id, target_node_id, final_prob, query_node_type, target_node_type) in enumerate(final_prob_list):
+            reranked_prob = float(torch.tensor(reranking_scores[i]))
+            query_rank = [node[0] for node in final_prob_list].index(query_node_id)
+            self.add_node(graph, query_node_type, query_node_id, target_node_id, reranked_prob, 'node_augmentation', query_rank, i)
+            self.add_node(graph, target_node_type, target_node_id, query_node_id, reranked_prob, 'node_augmentation', i, query_rank)
 
-        # decompose pred_scores by using edge_count_list
-        start_idx = 0
-        for source_rank, (query_node_id, query_node_score, query_node_type) in enumerate(topk_query_nodes):
-            if query_node_type == 'table segment':
-                target_node_type = 'passage'
-            else:
-                target_node_type = 'table segment'
-            
-            end_idx = start_idx + edge_count_list[source_rank]
-            sorted_idx = torch.argsort(pred_scores[start_idx:end_idx], descending=True)
-            for target_rank, idx in enumerate(sorted_idx):
-                target_node_id = target_node_id_list[start_idx + idx]
-                augment_type = f'node_augmentation'
-                query_node_score = float(pred_scores[start_idx + idx])
-                self.add_node(graph, query_node_type, query_node_id, target_node_id, query_node_score, augment_type, source_rank, target_rank)
-                self.add_node(graph, target_node_type, target_node_id, query_node_id, query_node_score, augment_type, target_rank, source_rank)
-            start_idx = end_idx
-    @profile
+    #@profile
     def get_expanded_query(self, nl_question, node_id, query_node_type):
         if query_node_type == 'table segment':
             table_key = node_id.split('_')[0]
@@ -386,7 +391,7 @@ class GraphQueryEngine:
         
         return expanded_query
 
-    @profile
+    #@profile
     def find_bipartite_subgraph(self, question, bipartite_subgraph_candidates):
         bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids = self.get_bipartite_subgraph_candidate_list(bipartite_subgraph_candidates)
         
@@ -406,7 +411,7 @@ class GraphQueryEngine:
                 self.add_node(bipartite_subgraph_candidates, 'table segment', table_segment_id, passage_id, self.cfg.max_edge_score, 'llm_selected')
                 self.add_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_id, self.cfg.max_edge_score, 'llm_selected')
 
-    @profile
+    #@profile
     def get_bipartite_subgraph_candidate_list(self, bipartite_subgraph_candidates):
         table_segment_id_to_linked_passage_ids = {}
         table_id_to_row_id_to_linked_passage_ids = {}
@@ -441,14 +446,14 @@ class GraphQueryEngine:
                 break
 
         return bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids
-    @profile
+    #@profile
     def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type, source_rank = 0, target_rank = 0):
         if source_node_id not in graph:
             graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type, source_rank, target_rank]]}
         else:
             graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
 
-    @profile
+    #@profile
     def find_relevant_nodes(self, nl_question, reduced_search_space):
         table_segment_id_to_augmented_nodes, table_id_to_augmented_nodes = self.get_table(reduced_search_space)
 
@@ -540,7 +545,7 @@ class GraphQueryEngine:
         
         return selected_table_segment_list
     
-    @profile
+    #@profile
     def select_table_segments(self, nl_question, table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info):
         
         prompt_list = []
@@ -627,7 +632,7 @@ class GraphQueryEngine:
         return table_and_linked_passages
 
 
-    @profile
+    #@profile
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         
         prompt_list = []

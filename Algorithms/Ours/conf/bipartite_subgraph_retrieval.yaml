@@ -4,8 +4,8 @@ table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original
 passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 
 # output
-final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/300_150_llm_70B_128.jsonl
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/time/300_150_llm_70B_128.jsonl
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/beam_search_10.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/time/beam_search_10.jsonl
 
 # experimental setting
 ## retrieve edges & tables
@@ -19,8 +19,7 @@ reranking_edge_max_length: 256
 ## predict missing edges
 node_scoring_method: direct #direct, max, min, avg
 ### expanded query retrieval
-top_k_of_query: 10
-top_k_of_target: 5
+beam_size: 10
 
 ## find bipartite subgraph with llm
 top_k_of_table_segment_select_w_llm: 3

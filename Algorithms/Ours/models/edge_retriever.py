@@ -35,14 +35,20 @@ def edge_retrieve():
     query = params["query"]
     k = params.get("k", 10000)
     torch.cuda.empty_cache()
-    retrieved_key_list, retrieved_score_list = retriever.search(query, k=k)
+    retrieved_key_list, retrieved_score_list = retriever.search(query, k=10000)
     
     edge_content_list = []
+    for key, edge_score in zip(retrieved_key_list, retrieved_score_list):
+        edge_content = edge_key_to_content[key]
+        if 'linked_entity_id' not in edge_content:
+            continue
+        edge_content['retrieval_score'] = edge_score
+        edge_content_list.append(edge_content)
 
-    for key in retrieved_key_list:
-        edge_content_list.append(edge_key_to_content[key])
+        if len(edge_content_list) >= k:
+            break
 
-    response = {"edge_content_list": edge_content_list, "retrieved_score_list": retrieved_score_list}
+    response = {"edge_content_list": edge_content_list}
 
     return response
 

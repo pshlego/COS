@@ -5,7 +5,7 @@ import unicodedata
 from tqdm import tqdm
 from Ours.dpr.data.qa_validation import has_answer
 from Ours.dpr.utils.tokenizers import SimpleTokenizer
-FINAL_MAX_EDGE_COUNT = 10
+FINAL_MAX_EDGE_COUNT = 50
 
 def dump_jsonl(data, path):
     """
@@ -33,12 +33,12 @@ time_list = read_jsonl("/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_
 
 # def evaluate(retrieved_graph_list, qa_dataset, graph_query_engine):
 def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_content):
-    # filtered_retrieval_type = ['edge_reranking', "node_augmentation", 'llm_selected']
-    # filtered_retrieval_type_1 = ['edge_reranking', 'llm_selected']
-    # filtered_retrieval_type_2 = ["node_augmentation"]
-    filtered_retrieval_type = ['edge_reranking', "node_augmentation_1", "node_augmentation", 'llm_selected']
+    filtered_retrieval_type = ['edge_reranking', "node_augmentation", 'llm_selected']
     filtered_retrieval_type_1 = ['edge_reranking', 'llm_selected']
-    filtered_retrieval_type_2 = ["node_augmentation_1", "node_augmentation"]
+    filtered_retrieval_type_2 = ["node_augmentation"]
+    # filtered_retrieval_type = ['llm_selected']
+    # filtered_retrieval_type_1 = ['llm_selected']
+    # filtered_retrieval_type_2 = []
     # 1. Revise retrieved graph
     revised_retrieved_graph = {}
     for node_id, node_info in retrieved_graph.items():                  
@@ -46,12 +46,12 @@ def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_cont
         if node_info['type'] == 'table segment':
             linked_nodes = [x for x in node_info['linked_nodes'] 
                                 if x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[3] < 10) and (x[4] < 10000)) 
-                                    or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 1) and (x[3] < 1)) 
+                                    or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 0) and (x[3] < 0)) 
                                     or x[2] in filtered_retrieval_type_1
                             ]
         elif node_info['type'] == 'passage':
             linked_nodes = [x for x in node_info['linked_nodes'] 
-                                if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 1) and (x[4] < 1)) 
+                                if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 0) and (x[4] < 0)) 
                                 or x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[4] < 10) and (x[3] < 10000)) 
                                 or x[2] in filtered_retrieval_type_1
                             ]
@@ -190,8 +190,8 @@ def remove_accents_and_non_ascii(text):
     return cleaned_text
 
 if __name__ == '__main__':
-    results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/300_150_llm_diff_prompt.jsonl"#/mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/200_100_original_llm_v2.jsonl"
-    # results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_5_5_full.jsonl"
+    results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/beam_search_300_150_w_llm_10.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/300_150_llm_8B.jsonl"#"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/beam_search_40.jsonl"#/mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/200_100_original_llm_v2.jsonl"
+    #results_path = "/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_5_5_full.jsonl"
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
     #"/mnt/sdf/OTT-QAMountSpace/ExperimentResults/graph_query_algorithm/expanded_query_retrieval_5_5_full.jsonl"#
@@ -214,13 +214,19 @@ if __name__ == '__main__':
     for passage_content in tqdm(passage_contents):
         passage_key_to_content[passage_content['title']] = passage_content
     print("4. Processing passages complete!", end = "\n\n")
-    
+    data_graph_error_cases = json.load(open("/home/shpark/OTT_QA_Workspace/data_graph_error_case.json"))
+    error_cases_id_list = ['2a1065f9912d3e46', 'b39816369f707b40', 'ba3ac95ed8e9d05b', '538f2e1e985199d4', '2231f0cb78f0e912', '1105e7db018cb365', 'b1407faec8e3917c', 'a035145717053d7d', '731adb9db2bd0f1b', '99ce8f40ac13bb76', 'f985766405c50438', '28a009738a90dbc4', 'dcdf89436e31c4fe'] #[data_graph_error_case['id'] for data_graph_error_case in data_graph_error_cases]
     retrieved_results = read_jsonl(results_path)
     recall_list = []
     error_case_list = [] 
 
-    for retrieved_result in tqdm(retrieved_results[:150]):#zip(min_data,max_data)):#[:209]
+    for retrieved_result in tqdm(retrieved_results):#zip(min_data,max_data)):#[:209]
         qa_data = retrieved_result["qa data"]
+        if qa_data['id'] not in error_cases_id_list:
+            continue
+        row_id = qa_data['positive_ctxs'][0]['rows'].index(qa_data['positive_ctxs'][0]['answer_node'][0][1][0])
+        gold_row = qa_data['positive_ctxs'][0]['text'].split('\n')[1+row_id]
+        gold_passage = qa_data['positive_ctxs'][0]['target_pasg_titles']
         retrieved_graph = retrieved_result["retrieved graph"]
         recall, error_case  = evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_content)
         recall_list.append(recall)
