@@ -1,17 +1,17 @@
 import re
 import json
-import vllm
 import hydra
 import requests
 from tqdm import tqdm
+import concurrent.futures
 from omegaconf import DictConfig
 from transformers import set_seed
 from utils.helper import NoIndent, MyEncoder
-from prompt.prompts_v2 import detect_aggregation_query_prompt, select_row_wise_prompt, select_passages_prompt_v2
+from prompt.prompts_v2 import detect_aggregation_query_prompt, select_row_wise_prompt, select_passages_prompt
 
 set_seed(0)
-
-@hydra.main(config_path = "conf", config_name = "graph_candidate_retrieval_v2")
+# torch.use_deterministic_algorithms(True)
+@hydra.main(config_path = "conf", config_name = "bipartite_subgraph_retrieval")
 def main(cfg: DictConfig):
     table_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json"
     passage_data_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json"
@@ -56,33 +56,34 @@ def main(cfg: DictConfig):
                     table_segment_id = f"{table_id}_{row_id}"
                     if table_segment_id not in [bipartite_subgraph_candidate['table_segment_id'] for bipartite_subgraph_candidate in bipartite_subgraph_candidate_list]:
                         bipartite_subgraph_candidate_list.append({"table_segment_id":table_segment_id, "linked_passage_ids": linked_passage_ids})
-
-        table_segment_id_to_passage_id_list = llm_node_selector.select_passage_wise(question, bipartite_subgraph_candidate_list)
+        
+        table_segment_id_to_passage_id_list = llm_node_selector.prune_passage_wise(question, bipartite_subgraph_candidate_list)
+        #table_segment_id_to_passage_id_list = llm_node_selector.select_passage_wise(question, bipartite_subgraph_candidate_list)
         list_answer.append({"qa data": qa_data, "table_segment_id_to_passage_id_list": table_segment_id_to_passage_id_list})
         print()
 
 class LlmNodeSelector:
-    def __init__(self, cfg, table_key_to_content, passage_key_to_content):
+    def __init__(self, cfg, table_key_to_content, passage_key_to_content, process_num=5):
         self.table_and_linked_passages_trim_length = cfg.table_and_linked_passages_trim_length
         self.passage_trim_length = cfg.passage_trim_length
 
         self.detect_aggregation_query_prompt = detect_aggregation_query_prompt
         self.select_row_wise_prompt = select_row_wise_prompt
-        self.select_passages_prompt = select_passages_prompt_v2#select_passages_prompt
-
+        self.select_passages_prompt = select_passages_prompt # select_passages_prompt_v2 #select_passages_prompt_v2#select_passages_prompt
+        # self.prune_passages_prompt = prune_passages_prompt_v3#prune_passages_prompt
         self.table_key_to_content = table_key_to_content
         self.passage_key_to_content = passage_key_to_content
-        
-        self.llm_addr = "http://localhost:5004/generate"
-        self.trim_addr = "http://localhost:5004/trim"
+        self.process_num = process_num
+        self.llm_addr_list = ["http://localhost:5004/generate", "http://localhost:5005/generate", "http://localhost:5006/generate", "http://localhost:5007/generate", "http://localhost:5008/generate", "http://localhost:5009/generate", "http://localhost:5010/generate"]
+        self.trim_addr_list = ["http://localhost:5004/trim", "http://localhost:5005/trim", "http://localhost:5006/trim", "http://localhost:5007/trim", "http://localhost:5008/trim", "http://localhost:5009/trim", "http://localhost:5010/trim"]
         
     def detect_aggregation_query(self, query):
         prompt = self.generate_detect_aggregation_query_prompt(query)
         response_list = requests.post(
-                self.llm_addr,
+                self.llm_addr_list[0],
                 json={
                     "prompt_list": [prompt],
-                    "max_tokens": 5
+                    "max_tokens": 256
                 },
                 timeout=None,
             ).json()["response_list"]
@@ -107,14 +108,20 @@ class LlmNodeSelector:
             prompt_list.append(prompt)
             table_id_list.append(table_id)
 
-        response_list = requests.post(
-                self.llm_addr,
-                json={
-                    "prompt_list": prompt_list,
-                    "max_tokens": 64
-                },
-                timeout=None,
-            ).json()["response_list"]
+        devided_prompt_list = []
+        for rank in range(self.process_num):
+            devided_prompt_list.append(prompt_list[rank*len(prompt_list)//self.process_num:(rank+1)*len(prompt_list)//self.process_num])
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_list = []
+            response_list = []
+            for rank in range(self.process_num):
+                future = executor.submit(self.request_worker, (self.llm_addr_list[rank], devided_prompt_list[rank]))
+                future_list.append(future)
+            
+            concurrent.futures.wait(future_list)
+            for future in future_list:
+                response_list.extend(future.result())
 
         pattern_col = r"f_row\(\[(.*?)\]\)"
         selected_table_id_to_row_id_list = {}
@@ -151,17 +158,32 @@ class LlmNodeSelector:
             prompt = self.generate_select_passages_prompt_v2(question, table_id, row_id, linked_passage_ids)
             prompt_list.append(prompt)
 
-        response_list = requests.post(
-                self.llm_addr,
-                json={
-                    "prompt_list": prompt_list,
-                    "max_tokens": 128
-                },
-                timeout=None,
-            ).json()["response_list"]
+        devided_prompt_list = []
+        for rank in range(self.process_num):
+            devided_prompt_list.append(prompt_list[rank*len(prompt_list)//self.process_num:(rank+1)*len(prompt_list)//self.process_num])
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_list = []
+            response_list = []
+            for rank in range(self.process_num):
+                future = executor.submit(self.request_worker, (self.llm_addr_list[rank], devided_prompt_list[rank]))
+                future_list.append(future)
+            
+            concurrent.futures.wait(future_list)
+            for future in future_list:
+                response_list.extend(future.result())
+        
+        # response_list = requests.post(
+        #         self.llm_addr,
+        #         json={
+        #             "prompt_list": prompt_list,
+        #             "max_tokens": 256
+        #         },
+        #         timeout=None,
+        #     ).json()["response_list"]
 
         # pattern_col = r"f_passage\(\[(.*?)\]\)"
-        pattern_col = r"\[(.*?)\]"
+        pattern_col = r"f_passage\(\[(.*?)\]\)"
         table_segment_id_to_passage_id_list = {}
         for bipartite_subgraph_candidate, response in zip(bipartite_subgraph_candidate_list, response_list):
             try:
@@ -180,7 +202,65 @@ class LlmNodeSelector:
             table_segment_id_to_passage_id_list[table_segment_id] = selected_passage_list
         
         return table_segment_id_to_passage_id_list
+    
+    def request_worker(self, input):
+        llm_addr = input[0]
+        prompt_list = input[1]
+        response_list = requests.post(
+                llm_addr,
+                json={
+                    "prompt_list": prompt_list,
+                    "max_tokens": 256
+                },
+                timeout=None,
+            ).json()["response_list"]
+
+        return response_list
+
+    def prune_passage_wise(self, question, bipartite_subgraph_candidate_list):
+        prompt_list = []
+        for bipartite_subgraph_candidate in bipartite_subgraph_candidate_list:
+            table_id = bipartite_subgraph_candidate['table_segment_id'].split('_')[0]
+            row_id = bipartite_subgraph_candidate['table_segment_id'].split('_')[1]
+            linked_passage_ids = bipartite_subgraph_candidate['linked_passage_ids']
+            prompt = self.generate_prune_passages_prompt_v2(question, table_id, row_id, linked_passage_ids)
+            prompt_list.append(prompt)
+
+        devided_prompt_list = []
+        for rank in range(self.process_num):
+            devided_prompt_list.append(prompt_list[rank*len(prompt_list)//self.process_num:(rank+1)*len(prompt_list)//self.process_num])
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_list = []
+            response_list = []
+            for rank in range(self.process_num):
+                future = executor.submit(self.request_worker, (self.llm_addr_list[rank], devided_prompt_list[rank]))
+                future_list.append(future)
             
+            concurrent.futures.wait(future_list)
+            for future in future_list:
+                response_list.extend(future.result())
+
+        # pattern_col = r"f_passage\(\[(.*?)\]\)"
+        pattern_col = r"f_prune\(\[(.*?)\]\)"
+        table_segment_id_to_passage_id_list = {}
+        for bipartite_subgraph_candidate, response in zip(bipartite_subgraph_candidate_list, response_list):
+            try:
+                pred = re.findall(pattern_col, response, re.S)[0].strip()
+            except Exception:
+                continue
+            
+            pred_passage_list = pred.split('", "')
+            selected_passage_list = []
+            for pred_passage in pred_passage_list:
+                if pred_passage.replace('"','') not in self.passage_key_to_content:
+                    continue
+                selected_passage_list.append(pred_passage.replace('"',''))
+
+            table_segment_id = bipartite_subgraph_candidate['table_segment_id']
+            table_segment_id_to_passage_id_list[table_segment_id] = selected_passage_list
+        
+        return table_segment_id_to_passage_id_list
 
     
     def generate_detect_aggregation_query_prompt(self, query):
@@ -197,24 +277,28 @@ class LlmNodeSelector:
         table_prompt_text += f"col : {column_names}\n"
         linked_passages_prompt_text = ""
         row_text_list = table_text.split('\n')[1:]
-        for row_id, linked_passage_ids in row_id_to_linked_passage_ids.items():
+        row_text_list = [row_text for row_text in row_text_list if row_text != '']
+        for row_id, row_text in enumerate(row_text_list):
+            if str(row_id) not in row_id_to_linked_passage_ids:
+                continue
+            linked_passage_ids = row_id_to_linked_passage_ids[str(row_id)]
             table_prompt_text += f"row {row_id} : {row_text_list[int(row_id)].replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ').split(' | ')}\n"
             linked_passages_prompt_text += f"passages linked to row {row_id}\n"
             for linked_passage_id in linked_passage_ids:
                 passage_content = self.passage_key_to_content[linked_passage_id]
                 linked_passage_text = passage_content['text']
                 response = requests.post(
-                    self.trim_addr,
+                    self.trim_addr_list[0],
                     json={
                         "raw_text": linked_passage_text,
                         "trim_length": self.table_and_linked_passages_trim_length
                     },
                     timeout=None,
                 ).json()
-                trimmed_text = response["trimmed_text"]
+                trimmed_text = response["trimmed_text"].replace('<|begin_of_text|>', '')
                 linked_passages_prompt_text += f"Title: {passage_content['title']}. Content: {trimmed_text}\n"
 
-        prompt = self.select_row_wise_prompt.format(question=query, table=table_text, linked_passages=linked_passages_prompt_text)
+        prompt = self.select_row_wise_prompt.format(question=query, table=table_prompt_text, linked_passages=linked_passages_prompt_text)
         return prompt
     
     def generate_select_passages_prompt(self, question, table_id, row_id, linked_passage_ids):
@@ -275,26 +359,58 @@ class LlmNodeSelector:
         
         table_segment_text = f"table caption : {table_title}\n"
         table_segment_text += f"col : {column_names}\n"
-        table_segment_text += f"row 1 : {row_values}\n\n"
+        table_segment_text += f"row 1 : {row_values}"
         
-        linked_passages_text = ""
+        linked_passages_text = f"List of linked passages: {linked_passage_ids}\n"
 
-        linked_passage_list = []
         for linked_passage_id in linked_passage_ids:
             passage_content = self.passage_key_to_content[linked_passage_id]
             passage_text = passage_content['text']
             response = requests.post(
-                self.trim_addr,
+                self.trim_addr_list[0],
                 json={
                     "raw_text": passage_text,
                     "trim_length": self.passage_trim_length
                 },
                 timeout=None,
             ).json()
-            trimmed_text = response["trimmed_text"]
-            linked_passages_text += f"Title : {passage_content['title']}. Content: {trimmed_text}\n\n"
+            trimmed_text = response["trimmed_text"].replace('<|begin_of_text|>', '')
+            linked_passages_text += f"Title : {passage_content['title']}. Content: {trimmed_text}\n"
         
         prompt = self.select_passages_prompt.format(question=question, table_segment=table_segment_text, linked_passages=linked_passages_text)
+        
+        return prompt
+
+
+    def generate_prune_passages_prompt_v2(self, question, table_id, row_id, linked_passage_ids):
+        table_content = self.table_key_to_content[str(table_id)]
+        table_title = table_content['title']
+        table_text = table_content['text']
+        column_names = table_text.split('\n')[0].replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')
+        row_values = table_text.split('\n')[1+int(row_id)].replace(' , ', '[SPECIAL]').replace(', ', ' | ').replace('[SPECIAL]', ' , ')
+        
+        table_segment_text = f"table caption : {table_title}\n"
+        table_segment_text += f"col : {column_names}\n"
+        table_segment_text += f"row 1 : {row_values}\n\n"
+        
+        linked_passages_text = f"List of linked passages: {linked_passage_ids}\n"
+
+        linked_passage_list = []
+        for linked_passage_id in linked_passage_ids:
+            passage_content = self.passage_key_to_content[linked_passage_id]
+            passage_text = passage_content['text']
+            response = requests.post(
+                self.trim_addr_list[0],
+                json={
+                    "raw_text": passage_text,
+                    "trim_length": self.passage_trim_length
+                },
+                timeout=None,
+            ).json()
+            trimmed_text = response["trimmed_text"].replace('<|begin_of_text|>', '')
+            linked_passages_text += f"Title : {passage_content['title']}. Content: {trimmed_text}\n"
+        
+        prompt = self.prune_passages_prompt.format(question=question, table_segment=table_segment_text, linked_passages=linked_passages_text)
         
         return prompt
 
@@ -328,7 +444,7 @@ def get_bipartite_subgraph_candidate_list(bipartite_subgraph_candidates):
             }
         )
         
-        if len(bipartite_subgraph_candidate_list) >= 3:
+        if len(bipartite_subgraph_candidate_list) >= 15:
             break
         
     return bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids

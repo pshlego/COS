@@ -1,3 +1,9 @@
+import re
+import json
+import copy
+import unicodedata
+from Ours.dpr.data.qa_validation import has_answer
+from Ours.dpr.utils.tokenizers import SimpleTokenizer
 import ast
 import json
 import time
@@ -25,15 +31,9 @@ def main(cfg: DictConfig):
     print(f"[[ Loading graph query engine... ]]", end = "\n\n")
     graph_query_engine = GraphQueryEngine(cfg)
     print(f"Graph query engine loaded successfully!", end = "\n\n")
-    # data_graph_error_cases = json.load(open("/home/shpark/OTT_QA_Workspace/data_graph_error_case.json"))
-    # error_cases_id_list = [data_graph_error_case['id'] for data_graph_error_case in data_graph_error_cases]
-    # data_graph_error_case_dict = {data_graph_error_case['id']: data_graph_error_case for data_graph_error_case in data_graph_error_cases}
+
     print(f"Start querying...")
     for qidx, qa_datum in tqdm(enumerate(qa_dataset), total = len(qa_dataset)):
-        # if qa_datum['id'] not in error_cases_id_list:
-        #     continue
-        # query graph for each question
-        # error_case = data_graph_error_case_dict[qa_datum['id']]
         question = qa_datum['question']
         init_time = time.time()
         retrieved_graph = graph_query_engine.query(question)
@@ -58,7 +58,7 @@ class GraphQueryEngine:
     def __init__(self, cfg):
         self.cfg = cfg
         
-        self.edge_retriever_addr = "http://localhost:5000/edge_retrieve"
+        self.edge_retriever_addr = "http://localhost:5000/edge_retrieve"#"http://localhost:5000/edge_retrieve"
         self.table_segment_retriever_addr = "http://localhost:5001/table_segment_retrieve"
         self.passage_retriever_addr = "http://localhost:5002/passage_retrieve"
         self.reranker_addr = "http://localhost:5003/rerank"
@@ -78,6 +78,8 @@ class GraphQueryEngine:
         passage_contents = json.load(open(cfg.passage_data_path))
         PASSAGES_NUM = len(passage_contents)
         self.passage_key_to_content = {str(passage_content['title']): passage_content for passage_content in tqdm(passage_contents)}
+        self.passage_id_to_passage_title = {str(passage_content['chunk_id']): passage_content['title'] for passage_content in tqdm(passage_contents)}
+
         print("2. Loaded " + str(PASSAGES_NUM) + " passages!", end = "\n\n")
         
         
@@ -85,7 +87,7 @@ class GraphQueryEngine:
         self.select_table_segment_prompt = select_table_segment_prompt
 
         self.llm_node_selector = LlmNodeSelector(cfg, self.table_key_to_content, self.passage_key_to_content)
-    #@profile
+    @profile
     def query(self, question):
         # 1. Search bipartite subgraph candidates
         bipartite_subgraph_candidates = self.search_bipartite_subgraph_candidates(question)
@@ -93,12 +95,9 @@ class GraphQueryEngine:
         # 2. Find bipartite subgraph
         self.find_bipartite_subgraph(question, bipartite_subgraph_candidates)
         
-        # self.find_relevant_nodes(question, bipartite_subgraph_candidates)
-        
         return bipartite_subgraph_candidates
-        # return bipartite_subgraph
 
-    #@profile
+    @profile
     def search_bipartite_subgraph_candidates(self, question):
         # 1.1 Retrieve edges
         retrieved_edges = self.retrieve_edges(question)
@@ -108,7 +107,7 @@ class GraphQueryEngine:
 
         # 1.3 Integrate edges into bipartite subgraph candidates
         bipartite_subgraph_candidates = self.integrate_into_graph(reranked_edges)
-        
+
         # 1.4 Assign scores to nodes
         self.assign_scores_to_nodes(question, bipartite_subgraph_candidates)
         
@@ -116,7 +115,7 @@ class GraphQueryEngine:
         self.augment_nodes(question, bipartite_subgraph_candidates)
         
         return bipartite_subgraph_candidates
-    #@profile
+    @profile
     def retrieve_edges(self, question):
         response = requests.post(
             self.edge_retriever_addr,
@@ -128,9 +127,12 @@ class GraphQueryEngine:
         ).json()
         
         retrieved_edges = response['edge_content_list']
+        # For MMQA, we need to convert linked_entity_id to linked_entity_title
+        for retrieved_edge in retrieved_edges:
+            retrieved_edge['linked_entity_id'] = self.passage_id_to_passage_title[retrieved_edge['linked_entity_id']]
         
         return retrieved_edges
-    #@profile
+    @profile
     def rerank_edges(self, question, retrieved_edges):
         model_input = []
         for element in retrieved_edges:
@@ -166,7 +168,7 @@ class GraphQueryEngine:
         reranked_edges = sorted(retrieved_edges, key = lambda x: x['reranking_score'], reverse = True)[:self.cfg.top_k_of_reranked_edges]
         
         return reranked_edges
-    #@profile
+    @profile
     def integrate_into_graph(self, reranked_edges):
         bipartite_subgraph_candidates = {}
         
@@ -180,13 +182,13 @@ class GraphQueryEngine:
                 
                 # get edge score
                 edge_score = reranked_edge['reranking_score']
-                
+
                 # add nodes
                 self.add_node(bipartite_subgraph_candidates, 'table segment', table_segment_node_id, passage_id, edge_score, 'edge_reranking')
                 self.add_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_node_id, edge_score, 'edge_reranking')
         
         return bipartite_subgraph_candidates
-    #@profile
+    @profile
     def assign_scores_to_nodes(self, question, bipartite_subgraph_candidates):
         if self.cfg.node_scoring_method == 'direct':
             node_text_list = []
@@ -232,7 +234,7 @@ class GraphQueryEngine:
             
         else:
             self.approximate_with_edge_scores(bipartite_subgraph_candidates)
-    #@profile
+    @profile
     def approximate_with_edge_scores(self, bipartite_subgraph_candidates):
         # Filter linked scores based on retrieval_type if provided
         for node_id, node_info in bipartite_subgraph_candidates.items():
@@ -249,7 +251,7 @@ class GraphQueryEngine:
             # Assign the computed score to the node
             bipartite_subgraph_candidates[node_id]['score'] = node_score
 
-    #@profile
+    @profile
     def augment_nodes(self, nl_question, integrated_graph):
         node_list = []
         for node_id, node_info in integrated_graph.items():
@@ -264,7 +266,7 @@ class GraphQueryEngine:
         
         self.expanded_query_retrieval(integrated_graph, nl_question, topk_query_nodes)
 
-    #@profile
+    @profile
     def expanded_query_retrieval(self, graph, nl_question, topk_query_nodes):
         final_prob_list = []  # 최종 확률값을 저장할 리스트
         
@@ -369,7 +371,7 @@ class GraphQueryEngine:
             self.add_node(graph, query_node_type, query_node_id, target_node_id, reranked_prob, 'node_augmentation', query_rank, i)
             self.add_node(graph, target_node_type, target_node_id, query_node_id, reranked_prob, 'node_augmentation', i, query_rank)
 
-    #@profile
+    @profile
     def get_expanded_query(self, nl_question, node_id, query_node_type):
         if query_node_type == 'table segment':
             table_key = node_id.split('_')[0]
@@ -391,7 +393,7 @@ class GraphQueryEngine:
         
         return expanded_query
 
-    #@profile
+    @profile
     def find_bipartite_subgraph(self, question, bipartite_subgraph_candidates):
         bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids = self.get_bipartite_subgraph_candidate_list(bipartite_subgraph_candidates)
         
@@ -411,7 +413,27 @@ class GraphQueryEngine:
                 self.add_node(bipartite_subgraph_candidates, 'table segment', table_segment_id, passage_id, self.cfg.max_edge_score, 'llm_selected')
                 self.add_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_id, self.cfg.max_edge_score, 'llm_selected')
 
-    #@profile
+    def llm_based_pruning(self, question, bipartite_subgraph_candidates):
+        bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids = self.get_bipartite_subgraph_candidate_list(bipartite_subgraph_candidates)
+        
+        is_aggregate = self.llm_node_selector.detect_aggregation_query(question)
+        if is_aggregate:
+            selected_rows = self.llm_node_selector.select_row_wise(question, table_id_to_row_id_to_linked_passage_ids)
+            if len(selected_rows) != 0:
+                for table_id, row_id, linked_passage_ids in selected_rows:
+                    table_segment_id = f"{table_id}_{row_id}"
+                    if table_segment_id not in [bipartite_subgraph_candidate['table_segment_id'] for bipartite_subgraph_candidate in bipartite_subgraph_candidate_list]:
+                        bipartite_subgraph_candidate_list.append({"table_segment_id":table_segment_id, "linked_passage_ids": linked_passage_ids})
+
+        table_segment_id_to_passage_id_list = self.llm_node_selector.prune_passage_wise(question, bipartite_subgraph_candidate_list)
+        
+        for table_segment_id, passage_id_list in table_segment_id_to_passage_id_list.items():
+            for passage_id in passage_id_list:
+                self.delete_node(bipartite_subgraph_candidates, 'table segment', table_segment_id, passage_id)
+                self.delete_node(bipartite_subgraph_candidates, 'passage', passage_id, table_segment_id)
+
+
+    @profile
     def get_bipartite_subgraph_candidate_list(self, bipartite_subgraph_candidates):
         table_segment_id_to_linked_passage_ids = {}
         table_id_to_row_id_to_linked_passage_ids = {}
@@ -442,18 +464,37 @@ class GraphQueryEngine:
                 }
             )
 
-            if len(bipartite_subgraph_candidate_list) >= 3:
+            if len(bipartite_subgraph_candidate_list) >= 10:
                 break
-
+        table_id_list = list(table_id_to_row_id_to_linked_passage_ids.keys())
+        
+        for table_id in table_id_list:
+            row_id_to_linked_passage_ids = table_id_to_row_id_to_linked_passage_ids[table_id]
+            table_content = self.table_key_to_content[table_id]
+            rows = table_content['text'].split('\n')[1:]
+            for row_id, row in enumerate(rows):
+                if row == "":
+                    continue
+                if str(row_id) not in row_id_to_linked_passage_ids:
+                    row_id_to_linked_passage_ids[str(row_id)] = []
+                    
+        
         return bipartite_subgraph_candidate_list, table_id_to_row_id_to_linked_passage_ids
-    #@profile
+    @profile
     def add_node(self, graph, source_node_type, source_node_id, target_node_id, score, retrieval_type, source_rank = 0, target_rank = 0):
         if source_node_id not in graph:
             graph[source_node_id] = {'type': source_node_type, 'linked_nodes': [[target_node_id, score, retrieval_type, source_rank, target_rank]]}
         else:
             graph[source_node_id]['linked_nodes'].append([target_node_id, score, retrieval_type, source_rank, target_rank])
 
-    #@profile
+    def delete_node(self, graph, source_node_type, source_node_id, target_node_id):
+        if source_node_id in graph:
+            linked_nodes = graph[source_node_id]['linked_nodes']
+            graph[source_node_id]['linked_nodes'] = [node for node in linked_nodes if node[0] != target_node_id]
+            if len(graph[source_node_id]['linked_nodes']) == 0:
+                del graph[source_node_id]
+
+    @profile
     def find_relevant_nodes(self, nl_question, reduced_search_space):
         table_segment_id_to_augmented_nodes, table_id_to_augmented_nodes = self.get_table(reduced_search_space)
 
@@ -545,7 +586,7 @@ class GraphQueryEngine:
         
         return selected_table_segment_list
     
-    #@profile
+    @profile
     def select_table_segments(self, nl_question, table_id_to_row_id_to_linked_passage_ids, table_id_to_table_info):
         
         prompt_list = []
@@ -632,7 +673,7 @@ class GraphQueryEngine:
         return table_and_linked_passages
 
 
-    #@profile
+    @profile
     def select_passages(self, nl_question, selected_table_segment_list, integrated_graph):
         
         prompt_list = []
@@ -727,5 +768,161 @@ def read_jsonl(file_path):
             data.append(json.loads(line.strip()))
     return data
 
+def evaluate(retrieved_graph, qa_data, table_key_to_content, passage_key_to_content, edge_limit):
+    filtered_retrieval_type = ['edge_reranking', "node_augmentation", 'retrieval', 'llm_selected']
+    filtered_retrieval_type_1 = ['edge_reranking',  'retrieval', 'llm_selected']
+    filtered_retrieval_type_2 = ["node_augmentation", 'retrieval']
+    # 1. Revise retrieved graph
+    revised_retrieved_graph = {}
+    for node_id, node_info in retrieved_graph.items():                  
+
+        if node_info['type'] == 'table segment':
+            linked_nodes = [x for x in node_info['linked_nodes'] 
+                                if x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[3] < 10) and (x[4] < 10000)) 
+                                    or x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[4] < 0) and (x[3] < 0)) 
+                                    or x[2] in filtered_retrieval_type_1
+                            ]
+        elif node_info['type'] == 'passage':
+            linked_nodes = [x for x in node_info['linked_nodes'] 
+                                if x[2] in filtered_retrieval_type and (x[2] == 'table_segment_node_augmentation' and (x[3] < 0) and (x[4] < 0)) 
+                                or x[2] in filtered_retrieval_type and (x[2] in filtered_retrieval_type_2 and (x[4] < 10) and (x[3] < 10000)) 
+                                or x[2] in filtered_retrieval_type_1
+                            ]
+        else:
+            continue
+        
+        if len(linked_nodes) == 0: continue
+        
+        revised_retrieved_graph[node_id] = copy.deepcopy(node_info)
+        revised_retrieved_graph[node_id]['linked_nodes'] = linked_nodes
+        
+        linked_scores = [linked_node[1] for linked_node in linked_nodes]
+
+        node_score = max(linked_scores)
+        
+        if node_score == 1000000:
+            additional_score_list = [linked_node[1] for linked_node in linked_nodes if linked_node[2] != 'llm_selected']
+            if len(additional_score_list) > 0:
+                node_score += max(additional_score_list)
+
+        revised_retrieved_graph[node_id]['score'] = node_score
+
+
+    # 2. Evaluate with revised retrieved graph
+    node_count = 0
+    edge_count = 0
+    answers = qa_data['answers']
+    context = ""
+    retrieved_table_set = set()
+    retrieved_passage_set = set()
+    sorted_retrieved_graph = sorted(revised_retrieved_graph.items(), key = lambda x: x[1]['score'], reverse = True)
+    
+    for node_id, node_info in sorted_retrieved_graph:
+        if edge_count < edge_limit:
+            node_count += 1
+        if node_info['type'] == 'table segment':
+            
+            table_id = node_id.split('_')[0]
+            table = table_key_to_content[table_id]
+            chunk_id = table['chunk_id']
+            node_info['chunk_id'] = chunk_id
+            
+            if table_id not in retrieved_table_set:
+                retrieved_table_set.add(table_id)
+                
+                if edge_count == edge_limit:
+                    continue
+                
+                context += table['text']
+                edge_count += 1
+                
+            max_linked_node_id, max_score, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default=(None, 0, 'edge_reranking', 0, 0))
+            
+            if max_linked_node_id in retrieved_passage_set:
+                continue
+            
+            retrieved_passage_set.add(max_linked_node_id)
+            passage_content = passage_key_to_content[max_linked_node_id]
+            passage_text = passage_content['title'] + ' ' + passage_content['text']
+            
+            row_id = int(node_id.split('_')[1])
+            table_rows = table['text'].split('\n')
+            column_name = table_rows[0]
+            row_values = table_rows[row_id+1]
+            table_segment_text = column_name + '\n' + row_values
+            
+            edge_text = table_segment_text + '\n' + passage_text
+            
+            if edge_count == edge_limit:
+                continue
+            
+            edge_count += 1
+            context += edge_text
+        
+        elif node_info['type'] == 'passage':
+
+            if node_id in retrieved_passage_set:
+                continue
+
+            max_linked_node_id, _, _, _, _ = max(node_info['linked_nodes'], key=lambda x: x[1], default = (None, 0, 'edge_reranking', 0, 0))
+            table_id = max_linked_node_id.split('_')[0]
+            table = table_key_to_content[table_id]
+            
+            if table_id not in retrieved_table_set:
+                retrieved_table_set.add(table_id)
+                if edge_count == edge_limit:
+                    continue
+                context += table['text']
+                edge_count += 1
+
+            row_id = int(max_linked_node_id.split('_')[1])
+            table_rows = table['text'].split('\n')
+            column_name = table_rows[0]
+            row_values = table_rows[row_id+1]
+            table_segment_text = column_name + '\n' + row_values
+            
+            if edge_count == edge_limit:
+                continue
+
+            retrieved_passage_set.add(node_id)
+            passage_content = passage_key_to_content[node_id]
+            passage_text = passage_content['title'] + ' ' + passage_content['text']
+            
+            edge_text = table_segment_text + '\n' + passage_text
+            context += edge_text
+            edge_count += 1
+
+    normalized_context = remove_accents_and_non_ascii(context)
+    normalized_answers = [remove_accents_and_non_ascii(answer) for answer in answers]
+    is_has_answer = has_answer(normalized_answers, normalized_context, SimpleTokenizer(), 'string')
+    
+    if is_has_answer:
+        recall = 1
+        error_analysis = copy.deepcopy(qa_data)
+        error_analysis['retrieved_graph'] = retrieved_graph
+        error_analysis['sorted_retrieved_graph'] = sorted_retrieved_graph[:node_count]
+        if  "hard_negative_ctxs" in error_analysis:
+            del error_analysis["hard_negative_ctxs"]
+    else:
+        recall = 0
+        error_analysis = copy.deepcopy(qa_data)
+        error_analysis['retrieved_graph'] = retrieved_graph
+        error_analysis['sorted_retrieved_graph'] = sorted_retrieved_graph[:node_count]
+        if  "hard_negative_ctxs" in error_analysis:
+            del error_analysis["hard_negative_ctxs"]
+
+    return recall, error_analysis
+
+def remove_accents_and_non_ascii(text):
+    # Normalize the text to decompose combined characters
+    normalized_text = unicodedata.normalize('NFD', text)
+    # Remove all characters that are not ASCII
+    ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
+    # Remove any remaining non-letter characters
+    cleaned_text = re.sub(r'[^A-Za-z0-9\s,!.?\-]', '', ascii_text)
+    return cleaned_text
+
 if __name__ == "__main__":
     main()
+# 'f77c5527ab108782'
+# +2

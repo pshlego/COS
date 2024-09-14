@@ -116,9 +116,9 @@ def main(cfg: DictConfig):
 
     saved_state = load_states_from_checkpoint(cfg.model_file)
     set_cfg_params_from_state(saved_state.encoder_params, cfg)
-    cfg.encoder.encoder_model_type = 'hf_cos'
-    sequence_length = 512
-    cfg.encoder.sequence_length = sequence_length
+    # cfg.encoder.encoder_model_type = 'hf_cos'
+    # sequence_length = 512
+    # cfg.encoder.sequence_length = sequence_length
     if cfg.encoder.pretrained_file is not None:
         print ('setting pretrained file to None', cfg.encoder.pretrained_file)
         cfg.encoder.pretrained_file = None

@@ -324,7 +324,7 @@ def span_proposal(cfg: DictConfig):
     model_to_load = get_model_obj(encoder)
     logger.info("Loading saved model state ...")
     model_to_load.load_state_dict(saved_state.model_dict, strict=False)
-    data, table_chunks, table_chunk_ids, row_start, row_indices = prepare_all_table_chunks(cfg.qa_dataset, tensorizer.tokenizer)
+    data, table_chunks, row_start, row_indices = prepare_all_table_chunks(cfg.qa_dataset, tensorizer.tokenizer)
     found_cells = generate_grounding(encoder, tensorizer, table_chunks, row_start, row_indices, cfg.batch_size)
 
     for i in tqdm(range(len(found_cells))):

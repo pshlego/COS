@@ -5,22 +5,164 @@
     "version": "0.2.0",
     "configurations": [
     
+
     
 
-
         {
-            "name": "prototype_of_graph_query_algorithm",
+            "name": "run_hotpot",
             "type": "python",
             "request": "launch",
-            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/Ours/eval_cross_encoder.py",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills/DPR/run_chain_of_skills_hotpot.py",
             "console": "integratedTerminal",
-            "python":"/home/shpark/anaconda3/envs/hf4/bin/python",
-            "args":[],
+            "python": "/home/shpark/anaconda3/envs/core/bin/python",
+            "args": [
+                "model_file=/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/COS/cos_nq_ott_hotpot_finetuned_6_experts.ckpt",
+                "encoder.use_moe=True",
+                "encoder.moe_type=mod2:attn",
+                "encoder.num_expert=6",
+                "encoder.encoder_model_type=hf_cos",
+                "qa_dataset=/mnt/sdd/shpark/OTT-QAMountSpace/Dataset/COS/HotpotQA/data/HotpotQA/hotpot_passage_for_index.json",
+                "do_span=True",
+                "out_file=/mnt/sdd/shpark/OTT-QAMountSpace/Dataset/COS/HotpotQA/processed/mention_span"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0",
+                "PYTHONPATH": "/home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills"
+            },
+            "justMyCode": false
+        },        
+        {
+            "name": "encode_corpus",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/OTTeR/OTTeR/scripts/encode_corpus.py",
+            "console": "integratedTerminal",
+            "python": "/home/shpark/anaconda3/envs/otter/bin/python",
+            "args": [
+                "--do_predict",
+                "--encode_table",
+                "--shared_encoder",
+                "--predict_batch_size", "800",
+                "--model_name", "roberta-base",
+                "--predict_file", "/mnt/sde/OTT-QAMountSpace/OTTeR/Dataset/preprocessed_data/retrieval/table_corpus_blink.pkl",
+                "--init_checkpoint", "/mnt/sde/OTT-QAMountSpace/OTTeR/checkpoint-87000/checkpoint_best.pt",
+                "--embed_save_path", "/mnt/sde/OTT-QAMountSpace/OTTeR/Embeddings/indexed_embeddings/table_corpus_blink",
+                "--fp16",
+                "--max_c_len", "512",
+                "--num_workers", "24"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1",
+                "PYTHONPATH": "/home/shpark/OTT_QA_Workspace/Algorithms/OTTeR/OTTeR:/home/shpark/OTT_QA_Workspace/Algorithms/OTTeR/apex",
+
+
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "rerank_passages",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills/Chainer/rerank_passages.py",
+            "console": "integratedTerminal",
+            "python": "/home/shpark/anaconda3/envs/core/bin/python",
+            "args": [
+                "--retriever_results", "/mnt/sde/OTT-QAMountSpace/CORE/Dataset/data/retriever_results/OTT-QA/dev_hop1_retrieved_results.json",
+                "--table_pasg_links_path", "/mnt/sde/OTT-QAMountSpace/CORE/ModelCheckpoints/models/table_chunks_to_passages_shard*",
+                "--passage_path", "/mnt/sde/OTT-QAMountSpace/CORE/Dataset/data/knowledge/ott_wiki_passages.json",
+                "--output_path", "/mnt/sde/OTT-QAMountSpace/CORE/Cache_1",
+                "--b_size", "50",
+                "--num_shards", "10"
+            ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0,1,2,3",
-                // "PYTHONPATH": "/home/shpark/COS/ColBERT",
+                "PYTHONPATH": "/home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills:/home/shpark/OTT_QA_Workspace:/mnt/sdd/shpark",
+
             },
-            "justMyCode": false,
+            "justMyCode": false
         },
+        {
+            "name": "eval_retriever",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/OTTeR/OTTeR/scripts/eval_ottqa_retrieval.py",
+            "console": "integratedTerminal",
+            "python": "/home/shpark/anaconda3/envs/otter/bin/python",
+            "args": [
+                "--raw_data_path", "/home/shpark/OTT_QA_Workspace/Algorithms/OTT-QA/OTT-QA/released_data/dev.json",
+                "--eval_only_ans",
+                "--query_embeddings_path", "/mnt/sde/OTT-QAMountSpace/OTTeR/Embeddings/question_dev.npy",
+                "--corpus_embeddings_path", "/mnt/sde/OTT-QAMountSpace/OTTeR/Embeddings/indexed_embeddings/table_corpus_blink.npy",
+                "--id2doc_path", "/mnt/sde/OTT-QAMountSpace/OTTeR/Embeddings/indexed_embeddings/table_corpus_blink/id2doc.json",
+                "--output_save_path", "/mnt/sde/OTT-QAMountSpace/OTTeR/Embeddings/indexed_embeddings/dev_output_k100_table_corpus_blink.json",
+                "--beam_size", "100"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "3",
+                "PYTHONPATH": "/home/shpark/OTT_QA_Workspace/Algorithms/OTTeR/OTTeR",
+
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "train_1hop_tb_retrieval",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR/scripts/train_1hop_tb_retrieval.py",
+            "console": "integratedTerminal",
+            "python": "/home/shpark/anaconda3/envs/dotter/bin/python",
+            "args": [
+                "--do_train",
+                "--prefix", "0",
+                "--predict_batch_size", "100",
+                "--model_name", "roberta-base",
+                "--all_blink_table_path", "/mnt/sde/OTT-QAMountSpace/OTTeR/Dataset/all_constructed_blink_tables.json",
+                "--shared_encoder",
+                "--train_batch_size", "64",
+                "--gradient_accumulation_steps", "1",
+                "--max_c_len", "512",
+                "--max_q_len", "70",
+                "--num_train_epochs", "20",
+                "--warmup_ratio", "0.1",
+                "--init_checkpoint", "/mnt/sde/OTT-QAMountSpace/OTTeR/checkpoint-87000/checkpoint_best.pt",
+                "--train_file", "/mnt/sde/OTT-QAMountSpace/DoTTeR/preprocessed_data/false_positive_removal/train_intable_bm25_blink_false_positive_removal.pkl",
+                "--predict_file", "/mnt/sde/OTT-QAMountSpace/DoTTeR/preprocessed_data/false_positive_removal/dev__blink_false_positive_removal.pkl",
+                "--output_dir", "/mnt/sde/OTT-QAMountSpace/DoTTeR/model/trained_models/dotter",
+                "--inject_summary",
+                "--injection_scheme", "column",
+                "--rate_model_path", "/mnt/sde/OTT-QAMountSpace/DoTTeR/model/trained_models/RATE/best_checkpoint",
+                "--normalize_summary_table",
+                "--save_tensor_path", "/mnt/sde/OTT-QAMountSpace/DoTTeR/preprocessed_data/retrieval/training/dotter",
+                "--seed", "42"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "2,3",
+                "PYTHONPATH": "/home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR:/home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR",
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "run_chainer_ott",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills/Chainer/run_chainer.py",
+            "console": "integratedTerminal",
+            "python": "/home/shpark/anaconda3/envs/hf4/bin/python",
+            "args": [
+                "--mode", "ott",
+                "--retriever_results", "/mnt/sde/OTT-QAMountSpace/CORE/Dataset/data/retriever_results/OTT-QA/dev_hop1_retrieved_results.json",
+                "--table_pasg_links_path", "/mnt/sde/OTT-QAMountSpace/CORE/ModelCheckpoints/models/table_chunks_to_passages_shard*",
+                "--passage_path", "/mnt/sde/OTT-QAMountSpace/CORE/Dataset/data/knowledge/ott_wiki_passages.json",
+                "--table_path", "/mnt/sde/OTT-QAMountSpace/CORE/Dataset/data/knowledge/ott_table_chunks_original.json",
+                "--previous_cache", "/mnt/sde/OTT-QAMountSpace/CORE/Cache_2/final_score_cache.json",
+                "--output_path", "/mnt/sde/OTT-QAMountSpace/CORE/Reader",
+                "--split", "dev"
+            ],
+            "env": {
+                // "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "justMyCode": false
+        }        
+        
     ]
 }

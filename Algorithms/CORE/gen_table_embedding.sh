@@ -1,0 +1,2 @@
+export CUDA_VISIBLE_DEVICES=0
+python /home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills/DPR/generate_dense_embeddings.py model_file=/mnt/sde/OTT-QAMountSpace/CORE/ModelCheckpoints/models/core_joint_retriever.ckpt ctx_src=ott_table out_file=/mnt/sde/OTT-QAMountSpace/CORE/Embeddings/Table batch_size=2048 shard_id=0 num_shards=1 gpu_id=0 num_gpus=1 

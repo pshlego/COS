@@ -15,12 +15,12 @@ from typing import Tuple
 import torch
 from torch import Tensor as T
 from torch import nn
-from transformers.modeling_bert import BertConfig, BertModel
+from transformers.models.bert.modeling_bert import BertConfig, BertModel
 from transformers.optimization import AdamW
-from transformers.tokenization_bert import BertTokenizer
-from transformers.tokenization_roberta import RobertaTokenizer
-from transformers.tokenization_electra import ElectraTokenizer 
-from transformers.modeling_electra import ElectraConfig, ElectraModel
+from transformers.models.bert.tokenization_bert import BertTokenizer
+from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
+from transformers.models.electra.tokenization_electra import ElectraTokenizer 
+from transformers.models.electra.modeling_electra import ElectraConfig, ElectraModel
 
 from dpr.models.biencoder import BiEncoder
 from dpr.models.biencoder_link_table import BiEncoderTableLink

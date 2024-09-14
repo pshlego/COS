@@ -1,0 +1,2 @@
+export CUDA_VISIBLE_DEVICES=2,3
+python /home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR/scripts/train_RATE.py --num_train_steps 60000 --evaluation_steps 1000 --logging_steps 20 --batch_size 32 --evaluation_batch_size 128 --wikitable_path /mnt/sde/OTT-QAMountSpace/OTT-QA/data/all_plain_tables.json --output_dir /mnt/sde/OTT-QAMountSpace/DoTTeR/model/train

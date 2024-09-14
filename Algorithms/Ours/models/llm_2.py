@@ -28,7 +28,6 @@ llm  = vllm.LLM(
             dtype = "half", # note: bfloat16 is not supported on nvidia-T4 GPUs
             max_model_len = max_model_length, # input length + output length
             enforce_eager = True,
-            seed = 0,
         )
 tokenizer = llm.get_tokenizer()
 
@@ -89,4 +88,4 @@ if __name__ == "__main__":
         datefmt="%m/%d %H:%M:%S",
         level=logging.INFO,
     )
-    serve(app, host="0.0.0.0", port=5004)
+    serve(app, host="0.0.0.0", port=5006)

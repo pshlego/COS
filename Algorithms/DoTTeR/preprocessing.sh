@@ -1,0 +1,2 @@
+python /home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR/preprocessing/false_positive_removal_preprocess.py --split train --nega intable_bm25 --aug_blink
+python /home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR/preprocessing/false_positive_removal_preprocess.py --split dev --aug_blink

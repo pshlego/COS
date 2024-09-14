@@ -12,16 +12,16 @@ app = Flask(__name__)
 cors = CORS(app)
 
 # Initialize Index
-index_name = "top1_edge_embeddings_v2_trained_1_epoch_bsize_512.nbits2"
-ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json"
-collection_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/edge_topk_1.tsv"
+index_name = "mmqa_top1_edge_embeddings_v2_trained_1_epoch_bsize_512.nbits2"#"top1_edge_embeddings_v2_trained_1_epoch_bsize_512.nbits2"
+ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/mmqa_edge/index_to_chunk_id_edge_topk_1.json"#"/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/edge/top_1/index_to_chunk_id_edge_topk_1.json"
+collection_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/mmqa_edge/edge_topk_1.tsv"
 index_root_path = "/mnt/sdc/shpark/OTT-QAMountSpace/Embeddings"
 checkpoint_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/edge_trained_v2"
 retriever = ColBERTRetriever(index_name, ids_path, collection_path, index_root_path, checkpoint_path)
 
 # Initilaize Edge Content
 EDGES_NUM = 17151500
-edge_dataset_path = "/mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_edge_1.jsonl"
+edge_dataset_path = "/mnt/sdd/shpark/preprocess_table_graph_cos_apply_topk_edge_1.jsonl"#"/mnt/sdd/shpark/preprocess_mmqa_table_graph_cos_apply_topk.jsonl"
 edge_key_to_content = read_jsonl(edge_dataset_path, key = 'chunk_id', num = EDGES_NUM)
 
 @app.route("/edge_retrieve", methods=["GET", "POST", "OPTIONS"])

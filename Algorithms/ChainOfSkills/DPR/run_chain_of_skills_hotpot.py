@@ -400,7 +400,7 @@ def prepare_hotpot_questions(filename):
                 answers = eval(row[1])
                 data.append({'question': question, 'answers': answers})
     else:
-        data = json.load(open(filename, 'r'))
+        data = json.load(open(filename, 'r'))#5233235
     passages = []
     for sample in data:
         if 'question' not in sample:

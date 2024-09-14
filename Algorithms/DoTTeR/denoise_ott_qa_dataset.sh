@@ -1,0 +1,3 @@
+mkdir /mnt/sde/OTT-QAMountSpace/DoTTeR/preprocessed_data/retrieval
+CUDA_VISIBLE_DEVICES=1 python /home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR/preprocessing/retriever_preprocess.py --split train --nega intable_contra --aug_blink --denoise --denoise_model_path /mnt/sde/OTT-QAMountSpace/DoTTeR/model/trained_models/false_positive_removal/best_model
+CUDA_VISIBLE_DEVICES=2 python /home/shpark/OTT_QA_Workspace/Algorithms/DoTTeR/DoTTeR/preprocessing/retriever_preprocess.py --split dev --nega intable_contra --aug_blink --denoise --denoise_model_path /mnt/sde/OTT-QAMountSpace/DoTTeR/model/trained_models/false_positive_removal/best_model

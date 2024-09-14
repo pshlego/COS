@@ -11,9 +11,9 @@ app = Flask(__name__)
 cors = CORS(app)
 
 # Initialize Index
-index_name = "table_segment_to_passage_embeddings_trained_w_sample_rate_0_5_cos_version_query_len_96.nbits2"
-ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
-collection_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv"
+index_name = "mmqa_table_segment_to_passage_embeddings_trained_w_sample_rate_0_5_query_len_96.nbits2" #"table_segment_to_passage_embeddings_trained_w_sample_rate_0_5_cos_version_query_len_96.nbits2"
+ids_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/mmqa_passage/index_to_chunk_id.json" #"/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/index_to_chunk_id.json"
+collection_path = "/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/mmqa_passage/collection.tsv" #"/mnt/sdf/OTT-QAMountSpace/Dataset/Ours/Embedding_Dataset/passage_cos_version/collection.tsv"
 index_root_path = "/mnt/sdc/shpark/OTT-QAMountSpace/Embeddings"
 checkpoint_path = "/mnt/sdf/OTT-QAMountSpace/ModelCheckpoints/Ours/ColBERT/table_segment_to_passage_sample_rate_0_5_query_len_96"
 retriever = ColBERTRetriever(index_name, ids_path, collection_path, index_root_path, checkpoint_path)

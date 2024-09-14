@@ -1,0 +1,2 @@
+CUDA_VISIBLE_DEVICES=0 python /home/shpark/OTT_QA_Workspace/Algorithms/ChainOfSkills/DPR/dense_retrieve_link.py model_file=/mnt/sde/OTT-QAMountSpace/CORE/ModelCheckpoints/models/core_joint_retriever.ckpt encoded_ctx_files=[/mnt/sde/OTT-QAMountSpace/CORE/Embeddings/ott_table_original*] \
+qa_dataset=/home/kaixinm/kaixinm/UDT-QA/DPR/data/CORE/ott_dev_q_to_tables_with_bm25neg.json do_retrieve=True

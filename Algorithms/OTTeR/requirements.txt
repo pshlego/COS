@@ -1,0 +1,17 @@
+pillow
+torch==1.8.0
+transformers==4.5.0
+faiss-gpu
+tensorboard==1.15.0
+tqdm
+torch-scatter
+scikit-learn
+scipy
+bottle
+nltk
+sentencepiece
+pexpect
+prettytable
+fuzzywuzzy
+dateparser
+pathos

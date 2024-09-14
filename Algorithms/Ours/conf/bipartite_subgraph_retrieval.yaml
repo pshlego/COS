@@ -1,32 +1,32 @@
 # input
-qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
-table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
-passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
+qa_dataset_path: /mnt/sdf/OTT-QAMountSpace/Dataset/MMQA/MMQA_QAs_dev_to_OTTQA.json #/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_dev_q_to_tables_with_bm25neg.json
+table_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/MMQA/MMQA_tables_to_OTTQA.json #/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_table_chunks_original.json
+passage_data_path: /mnt/sdf/OTT-QAMountSpace/Dataset/MMQA/MMQA_passages_to_OTTQA.json #/mnt/sdf/OTT-QAMountSpace/Dataset/COS/ott_wiki_passages.json
 
 # output
-final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/retrieved_subgraph/beam_search_10.jsonl
-query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/bipartite_subgraph_retrieval/time/beam_search_10.jsonl
+final_result_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/unit/retrieved_subgraph/mmqa_v2.jsonl
+query_time_save_path: /mnt/sdf/OTT-QAMountSpace/ExperimentResults/unit/time/mmqa_v2.jsonl
 
 # experimental setting
 ## retrieve edges & tables
-top_k_of_retrieved_edges: 300
+top_k_of_retrieved_edges: 400
 
 ## rerank edges & tables
-top_k_of_reranked_edges: 150
+top_k_of_reranked_edges: 200
 reranking_node_max_length: 128
 reranking_edge_max_length: 256
 
 ## predict missing edges
 node_scoring_method: direct #direct, max, min, avg
 ### expanded query retrieval
-beam_size: 10
+beam_size: 1
 
 ## find bipartite subgraph with llm
 top_k_of_table_segment_select_w_llm: 3
 top_k_of_passage_select_w_llm: 3
 top_k_of_table_select_w_llm: 3
-table_and_linked_passages_trim_length: 96
-passage_trim_length: 96
+table_and_linked_passages_trim_length: 128
+passage_trim_length: 128
 
 # etc
 max_edge_score: 1000000

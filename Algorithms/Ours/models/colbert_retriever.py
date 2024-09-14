@@ -16,11 +16,11 @@ class ColBERTRetriever:
         self.id_to_key = json.load(open(ids_path))
         print("Loaded id mappings!")
 
-        print("Loading edge index...")
+        print("Loading index...")
         disablePrint()
         self.searcher = Searcher(index=index_name, config=ColBERTConfig(), collection=collection_path, index_root=index_root_path, checkpoint=checkpoint_path)
         enablePrint()
-        print("Loaded edge index complete!")
+        print("Loaded index complete!")
 
     def search(self, query, k=10000):
         retrieved_info = self.searcher.search(query, k = k)

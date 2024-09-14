@@ -35,16 +35,14 @@ def star_retrieve():
     query = params["query"]
     k = params.get("k", 10000)
     torch.cuda.empty_cache()
-    retrieved_key_list, retrieved_score_list = retriever.search(query, k=k)
+    retrieved_key_list, retrieved_score_list = retriever.search(query, k=10000)
     
     edge_content_list = []
-    edge_score_list = []
     for key, score in zip(retrieved_key_list, retrieved_score_list):
         content = star_key_to_content[key]
         if 'mentions_in_row_info_dict' not in content:
             continue
         table_id = key.split('_')[0]
-        row_id = key.split('_')[1]
         mentions_in_row_info_dict = content['mentions_in_row_info_dict']
         
         for mention_id, mention_info in mentions_in_row_info_dict.items():
@@ -52,10 +50,13 @@ def star_retrieve():
             table_id = table_id
             linked_entity_id = linked_passage
             edge_content = {"chunk_id":key, "table_id":table_id, "linked_entity_id":linked_entity_id}
+            edge_content['retrieval_score'] = score
             edge_content_list.append(edge_content)
-            edge_score_list.append(score)
 
-    response = {"edge_content_list": edge_content_list, "retrieved_score_list": edge_score_list}
+            if len(edge_content_list) >= k:
+                break
+
+    response = {"edge_content_list": edge_content_list}
 
     return response
 
@@ -65,4 +66,4 @@ if __name__ == "__main__":
         datefmt="%m/%d %H:%M:%S",
         level=logging.INFO,
     )
-    serve(app, host="0.0.0.0", port=5000)
+    serve(app, host="0.0.0.0", port=5012)
